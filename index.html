@@ -83,6 +83,15 @@
           <tr><td><code>turbo(t)</code> <code>viridis(t)</code> <code>hsv2rgb(c)</code> <code>palette(t, k)</code></td><td>colour maps</td></tr>
           <tr><td><code>PI</code> <code>TAU</code></td><td>constants</td></tr>
         </table>
+        <h3>Pulse — sync to music</h3>
+        <p>Under <em>Pulse → Sync to</em>: <strong>Aux Cord bot</strong> reads the beat map of whatever the bot is playing from its localhost endpoint (the bot must run on this machine; trim the latency with <em>Sync offset</em>). <strong>Shared audio</strong> analyses a tab or your screen's sound live — pick the Discord window and tick <em>share audio</em>. <strong>Microphone</strong> listens to the room. The knobs punch speed, glow and zoom on the beat, and your field sees the music too:</p>
+        <table>
+          <tr><td><code>u.audio</code></td><td>vec4f: bass, mid, high, level — each 0…1</td></tr>
+          <tr><td><code>u.beat</code></td><td>1.0 on a beat, decaying to 0</td></tr>
+          <tr><td><code>u.phase</code></td><td>0…1 from one beat to the next</td></tr>
+          <tr><td><code>u.bpm</code></td><td>tempo</td></tr>
+        </table>
+<pre>return v * (1.0 + 2.0 * u.beat) + normalize(p) * u.audio.x;</pre>
         <h3>WGSL in one breath</h3>
         <p><code>let</code> is immutable, <code>var</code> mutable. Types are inferred: <code>let r = length(p);</code>. Vectors are <code>vec3f(x, y, z)</code> or <code>vec3f(0.0)</code>, swizzles work (<code>p.xz</code>). Write floats with a point (<code>2.0</code>) — a bare <code>var a = 2;</code> is an integer. Functions may be declared in any order. Ternaries are <code>select(ifFalse, ifTrue, cond)</code>.</p>
         <h3>Controls</h3>

@@ -6,7 +6,7 @@ const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls)
 
 export function buildSettings(host, S, onChange) {
   const rows = [];
-  let group = null;
+  let group = null, meter = null;
   for (const f of SCHEMA) {
     if (f.group) { group = el('div', 'grp'); group.append(el('div', 'grp-title', f.group)); host.append(group); continue; }
     const row = el('label', 'ctl');
@@ -49,6 +49,31 @@ export function buildSettings(host, S, onChange) {
         row.append(c, el('span', 'grow'));
         break;
       }
+      case 'text': {
+        const t = el('input'); t.type = 'text'; t.spellcheck = false; t.className = 'txt';
+        t.addEventListener('change', () => { S[f.key] = t.value.trim(); onChange(f.key); });
+        sync = () => { t.value = S[f.key]; };
+        row.append(t);
+        break;
+      }
+      case 'meter': {
+        row.className = 'ctl meter'; row.replaceChildren();
+        const bars = el('div', 'bars'), b = [];
+        for (let i = 0; i < 4; i++) { const x = el('i'); bars.append(x); b.push(x); }
+        const dot = el('div', 'beat'), info = el('div', 'info');
+        const st = el('span', 'st'), bpm = el('span', 'bpm'), ttl = el('span', 'ttl');
+        info.append(st, bpm, ttl); row.append(bars, dot, info);
+        let lastText = '';
+        meter = (A, status, name) => {
+          b[0].style.transform = `scaleY(${A.bass.toFixed(3)})`; b[1].style.transform = `scaleY(${A.mid.toFixed(3)})`;
+          b[2].style.transform = `scaleY(${A.high.toFixed(3)})`; b[3].style.transform = `scaleY(${A.level.toFixed(3)})`;
+          dot.style.opacity = A.beat.toFixed(3);
+          const text = status + '|' + (A.bpm ? Math.round(A.bpm) : '') + '|' + (name || '');
+          if (text !== lastText) { lastText = text; st.textContent = status; bpm.textContent = A.bpm ? Math.round(A.bpm) + ' bpm' : ''; ttl.textContent = name || ''; ttl.title = name || ''; }
+        };
+        sync = () => {};
+        break;
+      }
       case 'box': {
         const grid = el('div', 'box-grid'), inputs = [];
         for (const [k, key] of [['centre', 'c'], ['size', 's']]) {
@@ -69,7 +94,7 @@ export function buildSettings(host, S, onChange) {
   }
   const refresh = () => { for (const r of rows) { r.sync(); r.row.hidden = r.f.show ? !r.f.show(S) : false; } };
   refresh();
-  return { refresh };
+  return { refresh, meter: (A, status, name) => meter && meter(A, status, name) };
 }
 
 let toastTimer = 0;

@@ -4,6 +4,7 @@ import { SIM, REN, DISP, BOX, WORKGROUP, LIB, simSource, PREFIX_LINES, RENDER, D
 
 const TRAIL_FORMAT = 'rgba16float';
 const UNI_STRIDE = 256;                 // one sim uniform slice per substep, dynamic offset
+const ZERO4 = [0, 0, 0, 0];
 
 export class Engine {
   static async create(canvas, { maxSubsteps = 16 } = {}) {
@@ -149,9 +150,10 @@ export class Engine {
       w.set('cursor', ctl.cursor); w.set('cursorDown', ctl.cursorDown ? 1 : 0);
       w.set('color', S.colorLin); w.set('dropProb', S.drop);
       w.set('count', this.count); w.set('integrator', S.integrator); w.set('colorMode', S.colorMode);
-      w.set('speed', S.speed); w.set('minLife', S.life * 0.5); w.set('maxLife', S.life * 1.5);
+      w.set('speed', S.speed * (ctl.speedMul || 1)); w.set('minLife', S.life * 0.5); w.set('maxLife', S.life * 1.5);
       w.set('colorScale', S.colorScale); w.set('palette', S.palette); w.set('spawn', S.spawn);
       w.set('fadeLife', 0.15);
+      w.set('audio', ctl.audio || ZERO4); w.set('beat', ctl.beat || 0); w.set('phase', ctl.phase || 0); w.set('bpm', ctl.bpm || 0);
       for (let s = 0; s < steps; s++) {
         w.set('dt', dt); w.set('time', this.time); w.set('frame', this.frameIndex);
         w.set('seed', (this.seed = (this.seed + 0x9E3779B9) >>> 0)); w.set('substep', s);
@@ -173,11 +175,11 @@ export class Engine {
     const r = this.renW;
     r.set('viewProj', cam.viewProj); r.set('eye', cam.eye); r.set('fog', S.fog);
     r.set('viewport', [this.width, this.height]); r.set('width', S.width * ctl.dpr); r.set('intensity', S.intensity * 65536 / this.count);
-    r.set('persp', S.persp ? 1 : 0); r.set('fogRef', cam.dist);
+    r.set('persp', S.persp ? 1 : 0); r.set('fogRef', cam.viewDist || cam.dist);
     q.writeBuffer(this.renUB, 0, r.data);
     const dsp = this.dispW;
     const fade = ctl.motion > 0.06 ? Math.min(S.fade, S.fadeMoving) : S.fade;   // ctl.motion in rad/s
-    dsp.set('bg', S.bgLin); dsp.set('exposure', S.exposure); dsp.set('fade', this.clearTrails ? 0 : fade);
+    dsp.set('bg', S.bgLin); dsp.set('exposure', S.exposure * (ctl.glowMul || 1)); dsp.set('fade', this.clearTrails ? 0 : fade);
     dsp.set('eps', 0.0015); dsp.set('gamma', 2.2);
     q.writeBuffer(this.dispUB, 0, dsp.data);
     const bx = this.boxW;

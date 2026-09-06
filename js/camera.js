@@ -31,6 +31,7 @@ export class OrbitCamera {
     this.view = new Float32Array(16); this.proj = new Float32Array(16); this.viewProj = new Float32Array(16);
     this.aspect = 1;
     this._motion = 0; this._last = null;
+    this.punch = 1; this.viewDist = this.dist;             // punch: transient zoom (the beat), never persisted
     this.onChange = null;
   }
 
@@ -39,7 +40,8 @@ export class OrbitCamera {
     if (this.autoRotate) this.theta += this.autoRotate * dt;
     this.aspect = aspect;
     const cp = Math.cos(this.phi), sp = Math.sin(this.phi), ct = Math.cos(this.theta), st = Math.sin(this.theta);
-    const t = this.target, d = this.dist, e = this.eye, X = this.X, Y = this.Y, Z = this.Z;
+    const t = this.target, d = this.dist * this.punch, e = this.eye, X = this.X, Y = this.Y, Z = this.Z;
+    this.viewDist = d;
     let ux, uy, uz;
     if (this.up === 'z') { Z[0] = cp * ct; Z[1] = cp * st; Z[2] = sp; ux = 0; uy = 0; uz = 1; }
     else                 { Z[0] = cp * st; Z[1] = sp; Z[2] = cp * ct; ux = 0; uy = 1; uz = 0; }
@@ -62,10 +64,10 @@ export class OrbitCamera {
     // Motion since the last frame (for the smear-dissolving fade): angle + log-zoom + pan/dist.
     const L = this._last;
     if (L) {
-      this._motion = Math.abs(this.theta - L[0]) + Math.abs(this.phi - L[1]) + Math.abs(Math.log(d / L[2])) +
-        Math.hypot(t[0] - L[3], t[1] - L[4], t[2] - L[5]) / d;
-      L[0] = this.theta; L[1] = this.phi; L[2] = d; L[3] = t[0]; L[4] = t[1]; L[5] = t[2];
-    } else this._last = [this.theta, this.phi, d, t[0], t[1], t[2]];
+      this._motion = Math.abs(this.theta - L[0]) + Math.abs(this.phi - L[1]) + Math.abs(Math.log(this.dist / L[2])) +
+        Math.hypot(t[0] - L[3], t[1] - L[4], t[2] - L[5]) / this.dist;
+      L[0] = this.theta; L[1] = this.phi; L[2] = this.dist; L[3] = t[0]; L[4] = t[1]; L[5] = t[2];
+    } else this._last = [this.theta, this.phi, this.dist, t[0], t[1], t[2]];
   }
 
   get motion() { return this._motion; }

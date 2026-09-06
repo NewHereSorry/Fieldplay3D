@@ -255,4 +255,24 @@ fn get_velocity(p: vec3f) -> vec3f {
   },
 ];
 
+PRESETS.push({
+  id: 'pulse', name: 'Pulse (sync to music)',
+  code: `// Wants a beat: Pulse → Sync to. Bass breathes, mids spin, beats kick.
+fn get_velocity(p: vec3f) -> vec3f {
+  let r = max(length(p), 1e-4);
+  let n = p / r;
+  let breathe = n * (u.audio.x * 2.4 - 0.9);
+  let spin = vec3f(-p.z, 0.0, p.x) * (0.3 + 2.0 * u.audio.y);
+  let kick = curl(p * 1.3 + vec3f(u.phase * 2.0)) * (0.2 + 2.5 * u.beat);
+  return breathe + spin + kick;
+}
+fn get_color(p: vec3f, v: vec3f) -> vec3f {
+  return palette(0.15 + 0.85 * u.audio.w, 0u) * (0.6 + 0.8 * u.beat);
+}
+`,
+  box: { c: [0, 0, 0], s: [4, 4, 4] }, dt: 0.02, life: 6, spawn: 1, colorMode: 3,
+  pulseDrive: 0, pulseSpeed: 1.0, pulseGlow: 1.0, pulseZoom: 0.3,
+  cam: { up: 'y', th: 0.5, ph: 0.25 },
+});
+
 export const byId = id => PRESETS.find(p => p.id === id);

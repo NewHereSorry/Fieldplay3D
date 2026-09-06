@@ -27,6 +27,7 @@ When the camera moves fast the fade drops to *Trail while orbiting* so the old t
 | `js/editor.js` | dependency-free WGSL editor (highlight overlay, gutter, error lines) |
 | `js/presets.js` | the gallery: attractors and analytic flows with their bounds, dt and camera |
 | `js/random.js` | seeded random-field grammar |
+| `js/audio.js` | Pulse: Aux Cord clock + beat map sampling, or live Web Audio analysis → bass/mid/high/level/beat/phase/bpm |
 | `js/state.js` | defaults, the settings schema the panel is built from, share-link codec |
 | `js/ui.js` | schema → panel rows, toast, download |
 | `js/main.js` | bootstrap, loop, persistence, toolbar, keys, `window.FP` harness |
@@ -49,6 +50,10 @@ python fieldplay3d/tools/shot.py "http://localhost:5225/?preset=ring" soft.png -
 ## The field API
 
 `get_velocity(p)` gets the position, returns the velocity. Optional `get_color(p, v)`. Uniforms `u.time`, `u.frame`, `u.cursor`, `u.cursorDown`, `u.boundsMin`, `u.boundsMax`. Helpers `noise`, `noised`, `fbm`, `curl`, `hash3`, `hash1`, `rand3`, `rotateX/Y/Z`, `turbo`, `viridis`, `hsv2rgb`, `palette`, `PI`, `TAU`. The whole state (code, settings, camera) is deflated into the URL hash by the link button and autosaved to localStorage.
+
+## Pulse — sync to music
+
+The *Pulse* group in the panel drives the look from music: **Aux Cord bot** polls the bot's localhost endpoint (`GET /now` for the player's rate-aware clock, `GET /analysis?key=` for the track's 50 Hz band timeline + beat map, made by `dashcord/bots/aux-cord/auxcord/pulse.py`) and samples it at the moment the room hears, with a *Sync offset* for Discord's latency; **Shared audio** / **Microphone** analyse live sound in the browser (Web Audio, adaptive band peaks, a bass-onset beat detector). Either way `js/audio.js` produces bass/mid/high/level, a decaying `beat`, `phase` and `bpm`; the knobs punch speed, exposure and a camera zoom on the beat, and the field sees `u.audio`, `u.beat`, `u.phase`, `u.bpm`. The "Pulse (sync to music)" preset shows the idiom. Without Discord: `python -m auxcord.pulse song.mp3` (from the bot folder) serves one file's pulse on 5226.
 
 ## Live
 

@@ -12,7 +12,9 @@ export const SIM = layout('Uniforms', [
   ['count', 'u32'], ['integrator', 'u32'], ['colorMode', 'u32'], ['seed', 'u32'],
   ['speed', 'f32'], ['minLife', 'f32'], ['maxLife', 'f32'], ['substep', 'u32'],
   ['cursorDown', 'f32'], ['colorScale', 'f32'], ['palette', 'u32'], ['reset', 'u32'],
-  ['spawn', 'u32'], ['fadeLife', 'f32'], ['pad0', 'f32'], ['pad1', 'f32'],
+  ['spawn', 'u32'], ['fadeLife', 'f32'], ['beat', 'f32'], ['phase', 'f32'],
+  ['audio', 'vec4f'],
+  ['bpm', 'f32'], ['pad0', 'f32'], ['pad1', 'f32'], ['pad2', 'f32'],
 ]);
 
 export const REN = layout('RenderUniforms', [

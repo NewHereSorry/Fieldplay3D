@@ -6,6 +6,7 @@ import { PRESETS, byId } from './presets.js';
 import { randomField } from './random.js';
 import { SCHEMA, applyPreset, freshState, hexToLinear, encodeState, decodeState } from './state.js';
 import { buildSettings, toast, download } from './ui.js';
+import { Pulse } from './audio.js';
 
 const $ = s => document.querySelector(s);
 const STORE = 'fieldplay3d.state';
@@ -82,9 +83,20 @@ async function boot() {
     else if (key === 'box') { engine.reset(); }
     else if (key === 'upAxis') { cam.up = S.upAxis ? 'z' : 'y'; }
     else if (key === 'shape' || key === 'colorMode') settings.refresh();
+    else if (key === 'pulseSource' || key === 'pulseUrl') { startPulse(); settings.refresh(); }
     persist();
   });
   engine.setCount(1 << S.count);
+
+  // ---- pulse: the music, as numbers. Capture sources need a click, so a saved one waits for it ----
+  const pulse = new Pulse();
+  const KINDS = ['off', 'auxcord', 'capture', 'mic'];
+  const startPulse = () => pulse.setSource(KINDS[S.pulseSource] || 'off', S.pulseUrl).catch(e => toast(e.message));
+  if (S.pulseSource >= 2) {
+    pulse.status = 'click anywhere to start';
+    const once = () => { document.removeEventListener('pointerdown', once); startPulse(); };
+    document.addEventListener('pointerdown', once);
+  } else startPulse();
 
   // ---- persistence: localStorage + the URL hash, debounced ----
   let persistTimer = 0;
@@ -150,7 +162,7 @@ async function boot() {
   window.addEventListener('pointerup', () => { mouse.down = 0; });
 
   // ---- frame loop ----
-  const ctl = { cursor: [0, 0, 0], cursorDown: 0, motion: 0, paused: false, dpr: 1 };
+  const ctl = { cursor: [0, 0, 0], cursorDown: 0, motion: 0, paused: false, dpr: 1, audio: [0, 0, 0, 0], beat: 0, phase: 0, bpm: 0, speedMul: 1, glowMul: 1 };
   const stats = $('#stats');
   let last = performance.now(), fpsT = 0, fpsN = 0, running = true;
   function fit() {
@@ -162,6 +174,13 @@ async function boot() {
     const dt = Math.min(0.1, (now - last) / 1000); last = now;
     fit();
     cam.autoRotate = S.autoRotate * 0.6;
+    pulse.offset = S.pulseOffset; pulse.update(now / 1000);
+    const A = pulse.A, drive = S.pulseSource ? [A.beat, A.bass, A.level][S.pulseDrive] || 0 : 0;
+    cam.punch = 1 - 0.08 * S.pulseZoom * drive;
+    ctl.audio[0] = A.bass; ctl.audio[1] = A.mid; ctl.audio[2] = A.high; ctl.audio[3] = A.level;
+    ctl.beat = A.beat; ctl.phase = A.phase; ctl.bpm = A.bpm;
+    ctl.speedMul = 1 + S.pulseSpeed * drive; ctl.glowMul = 1 + S.pulseGlow * drive;
+    if (S.pulseSource) settings.meter(A, pulse.status, pulse.title);
     cam.update(engine.width / engine.height, dt);
     hexToLinear(S.color, S.colorLin); hexToLinear(S.bg, S.bgLin);
     cam.cursorOnPlane(mouse.x, mouse.y, canvas.clientWidth, canvas.clientHeight, ctl.cursor);
@@ -178,7 +197,7 @@ async function boot() {
   requestAnimationFrame(loop);
 
   // Harness for scripted verification (screenshots with a hidden pane, tests).
-  window.FP = { S, engine, cam, editor, compile, loadPreset, presets: PRESETS,
+  window.FP = { S, engine, cam, editor, compile, loadPreset, presets: PRESETS, pulse, settings,
     frame: () => frame(performance.now()), pause: v => setPaused(v), stop: () => { running = false; }, run: () => { if (!running) { running = true; requestAnimationFrame(loop); } } };
 }
 

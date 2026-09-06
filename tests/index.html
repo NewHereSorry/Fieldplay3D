@@ -11,6 +11,7 @@ import { PRESETS } from '../js/presets.js';
 import { randomField } from '../js/random.js';
 import { encodeState, decodeState, freshState } from '../js/state.js';
 import { OrbitCamera } from '../js/camera.js';
+import { Pulse, sampleAnalysis, decodeBands } from '../js/audio.js';
 
 const out = document.getElementById('out');
 let n = 0, m = 0;
@@ -21,7 +22,7 @@ out.textContent = '';
 
 // Uniform layouts follow WGSL's rules (vec3 aligns to 16, occupies 12).
 const f = SIM.fields;
-check('SIM layout', f.boundsMin.off === 0 && f.dt.off === 3 && f.boundsMax.off === 4 && f.time.off === 7 && f.cursor.off === 8 && f.count.off === 16 && f.fadeLife.off === 29 && SIM.size === 128,
+check('SIM layout', f.boundsMin.off === 0 && f.dt.off === 3 && f.boundsMax.off === 4 && f.time.off === 7 && f.cursor.off === 8 && f.count.off === 16 && f.fadeLife.off === 29 && f.beat.off === 30 && f.audio.off === 32 && f.bpm.off === 36 && SIM.size === 160,
   JSON.stringify(Object.fromEntries(Object.entries(f).map(([k, v]) => [k, v.off]))) + ' size ' + SIM.size);
 const g = REN.fields;
 check('REN layout', g.viewProj.off === 0 && g.eye.off === 16 && g.fog.off === 19 && g.viewport.off === 20 && g.width.off === 22 && REN.size === 112, JSON.stringify(g) + ' size ' + REN.size);
@@ -33,6 +34,33 @@ const S1 = await decodeState(enc);
 check('state roundtrip', JSON.stringify(S0) === JSON.stringify(S1), enc.slice(0, 40));
 check('share link is compact', enc.length < 1200, enc.length + ' chars');
 check('share link is url-safe', /^[A-Za-z0-9_-]+$/.test(enc), enc.slice(0, 40));
+
+// Pulse: sampling a beat map at the player's clock.
+{
+  const bytes = new Uint8Array(800);
+  for (let i = 0; i < 200; i++) { bytes[i * 4] = i; bytes[i * 4 + 1] = 255 - i; bytes[i * 4 + 2] = 128; bytes[i * 4 + 3] = 200; }
+  const an = { rate: 50, n: 200, bpm: 120, beats: [0, 0.5, 1, 1.5, 2, 2.5, 3], bytes };
+  const A = { bass: 0, mid: 0, high: 0, level: 0, beat: 0, phase: 0, bpm: 0, on: 0 };
+  sampleAnalysis(an, 1.0, A);
+  check('pulse: bands interpolate at the clock', Math.abs(A.bass - 50 / 255) < 1e-6 && Math.abs(A.high - 128 / 255) < 1e-6, JSON.stringify(A));
+  check('pulse: on the beat the pulse is 1 and phase 0', Math.abs(A.beat - 1) < 1e-6 && A.phase === 0, A.beat + ' ' + A.phase);
+  sampleAnalysis(an, 1.25, A);
+  check('pulse: a quarter second on it has decayed, phase is half', Math.abs(A.beat - Math.exp(-0.25 / 0.12)) < 1e-6 && Math.abs(A.phase - 0.5) < 1e-6, A.beat + ' ' + A.phase);
+  sampleAnalysis(an, 1.125, A);
+  check('pulse: bands blend between frames', Math.abs(A.bass - 56.25 / 255) < 1e-6, A.bass);
+  check('pulse: tempo is carried', A.bpm === 120 && A.on === 1, A.bpm);
+  check('pulse: bands decode from base64', decodeBands(btoa(String.fromCharCode(1, 2, 3, 4))).join() === '1,2,3,4');
+  const p = new Pulse(); p.source = 'auxcord';
+  p._now = { playing: true, paused: false, position: 1.0, rate: 1, recv: 10 }; p._analysis = an;
+  p.update(10.25);
+  check('pulse: the clock runs on from the last poll', Math.abs(p.A.phase - 0.5) < 1e-6, p.A.phase);
+  p._now.rate = 1.25; p.update(10.2);
+  check('pulse: a nightcore rate runs the clock faster', Math.abs(p.A.phase - 0.5) < 1e-6, p.A.phase);
+  p.offset = -0.25; p._now.rate = 1; p.update(10.25);
+  check('pulse: the sync offset shifts the clock', Math.abs(p.A.phase - 0) < 1e-6 && Math.abs(p.A.beat - 1) < 1e-6, p.A.phase + ' ' + p.A.beat);
+  p._now.paused = true; p.update(11);
+  check('pulse: paused music decays instead of jumping', p.A.beat < 1 && p.A.on === 0, p.A.beat);
+}
 
 // Camera: the orbit target projects to the centre of the screen, in front of the camera.
 const cam = new OrbitCamera(); cam.target = [1, 2, 3]; cam.update(1.5, 0);
