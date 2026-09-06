@@ -93,6 +93,7 @@ def main():
     ap.add_argument('--timeout', type=int, default=60, help='overall seconds before giving up')
     ap.add_argument('--text', action='store_true', help='also print document.body.innerText to stdout')
     ap.add_argument('--pre', help='JS statements to run right after load, before the wait (use return for a value; await allowed)')
+    ap.add_argument('--flag', action='append', default=[], help='extra Chromium switch (repeatable), e.g. --flag=--enable-blink-features=WebXRGPUBinding')
     ap.add_argument('--eval', help='JS statements to run after the wait, before the capture (use return for a value; await allowed)')
     a = ap.parse_args()
     exe = find_browser(a.browser)
@@ -102,7 +103,7 @@ def main():
     args = [exe, '--headless=new', '--remote-debugging-port=0', f'--user-data-dir={profile}',
             f'--window-size={a.width},{a.height}', '--hide-scrollbars', '--no-first-run', '--no-default-browser-check',
             '--enable-unsafe-webgpu', '--ignore-gpu-blocklist', '--disable-background-timer-throttling',
-            '--disable-renderer-backgrounding', '--mute-audio', 'about:blank']
+            '--disable-renderer-backgrounding', '--mute-audio', *a.flag, 'about:blank']
     proc = subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     deadline = time.time() + a.timeout; ok = False; ws = None
     try:
