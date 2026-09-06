@@ -76,6 +76,7 @@ button.rec { border-color: var(--danger); color: var(--danger); animation: blink
 .ctl input[type=number] { width: 100%; min-width: 0; background: #161c25; border: 1px solid #263244; border-radius: 6px; padding: 3px 6px; font: 12px var(--mono); }
 .box-grid { flex: 1; display: grid; grid-template-columns: 34px 1fr 1fr 1fr; gap: 4px; align-items: center; }
 .box-grid .k { color: var(--dim); font-size: 11px; }
+.ctl.note { color: var(--dim); font-size: 11px; padding: 0 0 4px; min-height: 0; line-height: 1.35; }
 .ctl input.txt { flex: 1; min-width: 0; background: #161c25; border: 1px solid #263244; border-radius: 6px; padding: 4px 8px; font: 12px var(--mono); }
 .ctl.meter { gap: 10px; min-height: 30px; }
 .meter .bars { display: flex; gap: 3px; align-items: flex-end; height: 22px; width: 44px; }

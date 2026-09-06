@@ -97,6 +97,52 @@ const hit = cam.cursorOnPlane(0, 0, 100, 100, [0, 0, 0]);
 const rel = [hit[0] - t[0], hit[1] - t[1], hit[2] - t[2]];
 check('cursor ray hits the target plane', Math.abs(rel[0] * cam.Z[0] + rel[1] * cam.Z[1] + rel[2] * cam.Z[2]) < 1e-6, rel.join(','));
 
+// Which button drives what. A detached element, synthetic pointer events, one fresh camera each.
+{
+  const rig = () => {
+    const el = document.createElement('div');
+    Object.defineProperty(el, 'clientHeight', { value: 500 });
+    el.setPointerCapture = () => {}; el.releasePointerCapture = () => {};   // no real pointer to capture
+    const c = new OrbitCamera(); c.attach(el); c.update(1, 0);
+    const send = (type, o) => el.dispatchEvent(new PointerEvent(type, {
+      pointerId: o.id ?? 1, pointerType: o.pointerType ?? 'mouse', button: o.button ?? 0,
+      buttons: o.buttons ?? 1, clientX: o.x ?? 0, clientY: o.y ?? 0,
+      shiftKey: !!o.shift, ctrlKey: !!o.ctrl }));
+    const drag = o => {
+      send('pointerdown', { ...o, x: 100, y: 100 });
+      const held = c.dragging;
+      send('pointermove', { ...o, x: 200, y: 160 });
+      send('pointerup', { ...o, x: 200, y: 160, buttons: 0 });
+      return held;
+    };
+    return { c, drag, moved: () => ({ th: c.theta, ph: c.phi, t: [...c.target], d: c.dist }) };
+  };
+  const turned = (a, b) => Math.abs(a.th - b.th) > 1e-6 || Math.abs(a.ph - b.ph) > 1e-6;
+  const panned = (a, b) => a.t.some((v, i) => Math.abs(v - b.t[i]) > 1e-6);
+
+  let r = rig(), was = r.moved(); let held = r.drag({ button: 2, buttons: 2 });
+  check('camera: right-drag orbits', turned(was, r.moved()) && !panned(was, r.moved()) && held, JSON.stringify(r.moved()));
+
+  r = rig(); was = r.moved(); held = r.drag({ button: 0, buttons: 1 });
+  check('camera: left-drag leaves the camera alone (it is the cursor\'s)', !turned(was, r.moved()) && !panned(was, r.moved()) && !held, JSON.stringify(r.moved()));
+
+  r = rig(); was = r.moved(); held = r.drag({ button: 1, buttons: 4 });
+  check('camera: middle-drag leaves the camera alone too', !turned(was, r.moved()) && !panned(was, r.moved()) && !held, JSON.stringify(r.moved()));
+
+  r = rig(); was = r.moved(); held = r.drag({ button: 0, buttons: 1, shift: true });
+  check('camera: shift-drag pans', panned(was, r.moved()) && !turned(was, r.moved()) && held, JSON.stringify(r.moved()));
+
+  r = rig(); was = r.moved(); r.drag({ button: 0, buttons: 1, ctrl: true });
+  check('camera: ctrl-drag pans as well', panned(was, r.moved()) && !turned(was, r.moved()), JSON.stringify(r.moved()));
+
+  r = rig(); was = r.moved(); held = r.drag({ button: 0, buttons: 1, pointerType: 'touch' });
+  check('camera: one finger still orbits, having no buttons to hold', turned(was, r.moved()) && held, JSON.stringify(r.moved()));
+
+  r = rig(); was = r.moved();
+  r.drag({ button: 2, buttons: 2 });
+  check('camera: dragging is false again once the button is up', r.c.dragging === false, r.c.dragging);
+}
+
 // GPU.
 let engine;
 try { engine = await Engine.create(document.getElementById('c')); check('WebGPU device', true); }
@@ -164,11 +210,11 @@ check('sim time advanced (the reset frame does not integrate)', Math.abs(engine.
 // against cursor pulling — how many particles end up near the point it sits on.
 {
   const read = dev.createBuffer({ size: 1024 * 16, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
-  const near = async (mode, force) => {
+  const near = async (mode, force, sign = 1) => {
     const C = freshState(); C.colorLin = [1, 1, 1]; C.bgLin = [0, 0, 0];
     C.cursorForce = force; C.cursorRadius = 1.5;
     const cam3 = new OrbitCamera(); cam3.dist = 6; cam3.update(1, 0);
-    const c = { cursor: [0, 0, 0], cursorDown: 0, motion: 0, paused: false, dpr: 1, cursorMode: mode };
+    const c = { cursor: [0, 0, 0], cursorDown: 0, motion: 0, paused: false, dpr: 1, cursorMode: mode, cursorSign: sign };
     engine.seed = 1; engine.reset();
     for (let i = 0; i < 240; i++) engine.frame(C, cam3, c);
     const e3 = dev.createCommandEncoder();
@@ -191,6 +237,11 @@ check('sim time advanced (the reset frame does not integrate)', Math.abs(engine.
   check('cursor: the force never throws a particle out of the box', pull.worst < 2.61 && push.worst < 2.61, `${pull.worst.toFixed(2)} / ${push.worst.toFixed(2)} from centre, box half-diagonal 2.60`);
   const swirl = await near(3, 4);
   check('cursor: swirling keeps them in the box too', swirl.worst < 2.61 && isFinite(swirl.worst), swirl.worst);
+  // The middle button is the left one with the sign flipped: pulling inverted must read as pushing.
+  const inverted = await near(1, 4, -1);
+  check('cursor: a negated force turns the pull into a push', inverted.hits < off.hits && Math.abs(inverted.hits - push.hits) < off.hits, `${inverted.hits} near, push was ${push.hits}, off was ${off.hits}`);
+  const back = await near(2, 4, -1);
+  check('cursor: negating a push pulls instead', back.hits > off.hits * 2, `${back.hits} near vs ${off.hits} with it off`);
 }
 done();
 </script>

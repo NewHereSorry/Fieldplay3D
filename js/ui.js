@@ -49,6 +49,11 @@ export function buildSettings(host, S, onChange) {
         row.append(c, el('span', 'grow'));
         break;
       }
+      case 'note': {
+        row.className = 'ctl note'; row.replaceChildren(document.createTextNode(f.text));
+        sync = () => {};
+        break;
+      }
       case 'text': {
         const t = el('input'); t.type = 'text'; t.spellcheck = false; t.className = 'txt';
         t.addEventListener('change', () => { S[f.key] = t.value.trim(); onChange(f.key); });

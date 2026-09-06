@@ -62,7 +62,9 @@ The *Pulse* group in the panel drives the look from music: **Aux Cord bot** poll
 
 ## The cursor
 
-Hovering bends the flow toward the pointer by default (*Cursor → Hovering*: pulls, pushes, swirls or does nothing; *Strength*, and *Reach* as a fraction of the box). It is applied inside `field()`, so every integrator stage sees it, and it is proportional to the local speed — one strength reads the same in a gentle swirl and in a Lorenz attractor. Dragging belongs to the camera, so the force stops while you orbit, and it is off whenever the pointer leaves the canvas.
+Holding the **left button** bends the flow toward the pointer; the **middle button** does the opposite, which is the same gesture with a negated `cursorForce` — so pull becomes push and swirl turns the other way, and the shader needs one code path, not three. *Cursor → Left button* picks pulls / pushes / swirls / does nothing, with *Strength* and *Reach* as a fraction of the box. The force is applied inside `field()`, so every integrator stage sees it, and it is proportional to the local speed — one strength reads the same in a gentle swirl and in a Lorenz attractor.
+
+Because the left and middle buttons are the cursor's, the camera moved: **right-drag orbits**, **shift or ctrl drag pans**, the wheel zooms. Touch is unchanged (one finger orbits, two pan and pinch) since a finger has no buttons, and a camera drag never disturbs the flow.
 
 ## Live
 

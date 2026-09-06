@@ -210,15 +210,18 @@ async function boot() {
   });
 
   // ---- cursor uniform ----
-  const mouse = { x: 0, y: 0, down: 0, over: 0 };
-  canvas.addEventListener('pointermove', e => { mouse.x = e.clientX; mouse.y = e.clientY; mouse.over = 1; });
-  canvas.addEventListener('pointerenter', () => { mouse.over = 1; });
+  // e.buttons is the bitmask of what is held right now (1 left, 2 right, 4 middle) and is already
+  // up to date on a pointerup, so one handler covers press, drag and release.
+  const mouse = { x: 0, y: 0, down: 0, over: 0, buttons: 0 };
+  const track = e => { mouse.x = e.clientX; mouse.y = e.clientY; mouse.over = 1; mouse.buttons = e.buttons; mouse.down = e.buttons ? 1 : 0; };
+  for (const type of ['pointermove', 'pointerdown', 'pointerup']) canvas.addEventListener(type, track);
+  canvas.addEventListener('pointerenter', track);
   canvas.addEventListener('pointerleave', () => { mouse.over = 0; });
-  canvas.addEventListener('pointerdown', e => { mouse.x = e.clientX; mouse.y = e.clientY; mouse.down = 1; });
-  window.addEventListener('pointerup', () => { mouse.down = 0; });
+  window.addEventListener('pointerup', e => { mouse.buttons = e.buttons; mouse.down = e.buttons ? 1 : 0; });
+  window.addEventListener('blur', () => { mouse.buttons = 0; mouse.down = 0; });
 
   // ---- frame loop ----
-  const ctl = { cursor: [0, 0, 0], cursorDown: 0, motion: 0, paused: false, dpr: 1, audio: [0, 0, 0, 0], beat: 0, phase: 0, bpm: 0, speedMul: 1, glowMul: 1, cursorMode: 0 };
+  const ctl = { cursor: [0, 0, 0], cursorDown: 0, motion: 0, paused: false, dpr: 1, audio: [0, 0, 0, 0], beat: 0, phase: 0, bpm: 0, speedMul: 1, glowMul: 1, cursorMode: 0, cursorSign: 1 };
   const stats = $('#stats');
   let last = performance.now(), fpsT = 0, fpsN = 0, running = true;
   function fit() {
@@ -241,8 +244,10 @@ async function boot() {
     hexToLinear(S.color, S.colorLin); hexToLinear(S.bg, S.bgLin);
     cam.cursorOnPlane(mouse.x, mouse.y, canvas.clientWidth, canvas.clientHeight, ctl.cursor);
     ctl.cursorDown = mouse.down; ctl.motion = cam.motion / Math.max(dt, 1e-3); ctl.paused = paused;
-    // The cursor bends the flow while it hovers; a drag belongs to the camera, so it stops there.
-    ctl.cursorMode = (mouse.over && !cam.dragging) ? S.cursorMode : 0;
+    // Hold the left button to bend the flow, the middle one to bend it the other way. A drag that
+    // belongs to the camera (right, or shift/ctrl) leaves the flow alone.
+    const held = (mouse.over && !cam.dragging) ? (mouse.buttons & 1 ? 1 : (mouse.buttons & 4 ? -1 : 0)) : 0;
+    ctl.cursorMode = held ? S.cursorMode : 0; ctl.cursorSign = held;
     engine.frame(S, cam, ctl);
     fpsN++; fpsT += dt;
     if (fpsT >= 0.5) {

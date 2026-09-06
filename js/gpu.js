@@ -155,7 +155,9 @@ export class Engine {
       w.set('fadeLife', 0.15);
       w.set('audio', ctl.audio || ZERO4); w.set('beat', ctl.beat || 0); w.set('phase', ctl.phase || 0); w.set('bpm', ctl.bpm || 0);
       // Cursor radius is a fraction of the box, so it means the same thing in every preset.
-      w.set('cursorMode', ctl.cursorMode || 0); w.set('cursorForce', S.cursorForce);
+      // A negative force is the same gesture inverted — pull becomes push, swirl turns the other
+      // way — which is all the middle button is.
+      w.set('cursorMode', ctl.cursorMode || 0); w.set('cursorForce', S.cursorForce * (ctl.cursorSign || 1));
       w.set('cursorRadius', S.cursorRadius * 0.5 * Math.hypot(S.box.s[0], S.box.s[1], S.box.s[2]));
       w.set('cursorAxis', cam.Z);
       for (let s = 0; s < steps; s++) {

@@ -91,17 +91,20 @@ export class OrbitCamera {
   zoom(f) { this.dist = Math.min(1e6, Math.max(1e-3, this.dist * f)); this._changed(); }
   _changed() { if (this.onChange) this.onChange(); }
 
-  // Pointer + wheel + pinch on an element. Left drag rotates, right/middle/shift drag pans, wheel zooms.
+  // Pointer, wheel and pinch on an element. The left and middle buttons belong to the cursor's
+  // force (main.js), so on a mouse the camera answers to the right button and to shift or ctrl:
+  // right drag orbits, shift/ctrl drag pans, wheel zooms. A finger has no buttons, so touch keeps
+  // one finger orbiting and two panning and pinching.
   attach(el) {
     const ptrs = new Map(); let mode = 0, lx = 0, ly = 0, pinch = 0;
-    const drag = () => { this.dragging = ptrs.size > 0; };
+    const drag = () => { this.dragging = mode !== 0 && ptrs.size > 0; };   // is the CAMERA being dragged
     const centre = () => { let x = 0, y = 0; for (const p of ptrs.values()) { x += p.x; y += p.y; } return [x / ptrs.size, y / ptrs.size]; };
     const span = () => { const a = [...ptrs.values()]; return a.length < 2 ? 0 : Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y); };
     el.addEventListener('pointerdown', e => {
       if (e.button > 2) return;
       el.setPointerCapture(e.pointerId);
       ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
-      mode = (e.button === 0 && !e.shiftKey && !e.ctrlKey) ? 1 : 2;
+      mode = e.pointerType !== 'mouse' ? 1 : (e.shiftKey || e.ctrlKey) ? 2 : e.button === 2 ? 1 : 0;
       [lx, ly] = centre(); pinch = span(); drag();
     });
     el.addEventListener('pointermove', e => {
