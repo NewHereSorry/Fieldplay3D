@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>fieldplay 3D — vector fields in a volume</title>
+<meta name="description" content="Type a 3D vector field in WGSL and watch millions of particles flow through it, computed on the GPU with compute shaders.">
+<link rel="stylesheet" href="css/editor.css">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="app">
+  <canvas id="gl"></canvas>
+
+  <aside id="panel">
+    <header class="bar">
+      <h1>fieldplay<span>3D</span></h1>
+      <div class="grow"></div>
+      <button id="btn-help" class="icon" title="Help">?</button>
+      <button id="btn-hide" class="icon" title="Hide panel (H)">‹</button>
+    </header>
+
+    <div class="row">
+      <select id="preset" title="Preset"></select>
+      <button id="btn-random" title="Generate a random field">⚄ Random</button>
+    </div>
+
+    <section class="field">
+      <div class="sec-title">Vector field <span id="status" class="status"></span></div>
+      <div id="editor"></div>
+      <div id="errors" class="errors" hidden></div>
+    </section>
+
+    <section id="settings" class="settings"></section>
+
+    <footer class="about">
+      A 3D take on <a href="https://github.com/anvaka/fieldplay" target="_blank" rel="noopener">anvaka/fieldplay</a>.
+      Particles are integrated in a WebGPU compute shader; trails are an HDR frame buffer that fades.
+    </footer>
+  </aside>
+
+  <div id="toolbar">
+    <button id="btn-show" class="icon" title="Show panel (H)" hidden>›</button>
+    <button id="btn-pause" class="icon" title="Pause (space)">❚❚</button>
+    <button id="btn-reset" class="icon" title="Reset particles (R)">↺</button>
+    <button id="btn-shot" class="icon" title="Save a PNG">📷</button>
+    <button id="btn-rec" class="icon" title="Record a WebM">⏺</button>
+    <button id="btn-share" class="icon" title="Copy a share link">🔗</button>
+    <button id="btn-full" class="icon" title="Fullscreen (F)">⛶</button>
+  </div>
+
+  <div id="stats"></div>
+  <div id="toast" hidden></div>
+
+  <div id="help" class="modal" hidden>
+    <div class="modal-card">
+      <header><h2>How it works</h2><div class="grow"></div><button class="icon" id="btn-help-close">×</button></header>
+      <div class="modal-body">
+        <p>Every particle asks your field for its velocity, takes a step, and leaves a trail. The field is a WGSL function:</p>
+<pre>fn get_velocity(p: vec3f) -> vec3f {
+  return vec3f(-p.z, 0.0, p.x);   // orbit the y axis
+}</pre>
+        <p>Optionally colour them yourself (choose <em>Colour by → get_color()</em>):</p>
+<pre>fn get_color(p: vec3f, v: vec3f) -> vec3f {
+  return turbo(length(v) * 0.5);
+}</pre>
+        <h3>Uniforms</h3>
+        <table>
+          <tr><td><code>u.time</code></td><td>simulation time (sum of time steps)</td></tr>
+          <tr><td><code>u.frame</code></td><td>frame counter</td></tr>
+          <tr><td><code>u.cursor</code></td><td>the mouse, projected onto the plane through the orbit centre that faces the camera</td></tr>
+          <tr><td><code>u.cursorDown</code></td><td>1.0 while a mouse button is held</td></tr>
+          <tr><td><code>u.boundsMin</code> <code>u.boundsMax</code></td><td>the box particles live in</td></tr>
+        </table>
+        <h3>Helpers</h3>
+        <table>
+          <tr><td><code>noise(p)</code></td><td>gradient noise, about −1…1</td></tr>
+          <tr><td><code>noised(p)</code></td><td>vec4f: value and its gradient</td></tr>
+          <tr><td><code>fbm(p)</code></td><td>four octaves of noise</td></tr>
+          <tr><td><code>curl(p)</code></td><td>divergence-free noise — smoke and swirls</td></tr>
+          <tr><td><code>hash3(p)</code> <code>hash1(p)</code></td><td>random per integer cell</td></tr>
+          <tr><td><code>rotateX(p, a)</code> …Y …Z</td><td>rotate a vector</td></tr>
+          <tr><td><code>turbo(t)</code> <code>viridis(t)</code> <code>hsv2rgb(c)</code> <code>palette(t, k)</code></td><td>colour maps</td></tr>
+          <tr><td><code>PI</code> <code>TAU</code></td><td>constants</td></tr>
+        </table>
+        <h3>WGSL in one breath</h3>
+        <p><code>let</code> is immutable, <code>var</code> mutable. Types are inferred: <code>let r = length(p);</code>. Vectors are <code>vec3f(x, y, z)</code> or <code>vec3f(0.0)</code>, swizzles work (<code>p.xz</code>). Write floats with a point (<code>2.0</code>) — a bare <code>var a = 2;</code> is an integer. Functions may be declared in any order. Ternaries are <code>select(ifFalse, ifTrue, cond)</code>.</p>
+        <h3>Controls</h3>
+        <table>
+          <tr><td>drag</td><td>orbit</td></tr>
+          <tr><td>right-drag / shift-drag / two fingers</td><td>pan</td></tr>
+          <tr><td>wheel / pinch</td><td>zoom</td></tr>
+          <tr><td>space</td><td>pause</td></tr>
+          <tr><td>R</td><td>reset particles</td></tr>
+          <tr><td>H</td><td>hide the panel</td></tr>
+          <tr><td>F</td><td>fullscreen</td></tr>
+          <tr><td>ctrl+enter</td><td>compile now</td></tr>
+        </table>
+        <p>The link button copies a URL that holds the whole state — field, settings and camera.</p>
+      </div>
+    </div>
+  </div>
+
+  <div id="nogpu" class="modal" hidden>
+    <div class="modal-card">
+      <header><h2>WebGPU is not available</h2></header>
+      <div class="modal-body">
+        <p id="nogpu-msg"></p>
+        <p>This page runs its particles in compute shaders, which need WebGPU. It works in Chrome and Edge 113+ on Windows, macOS and ChromeOS, Chrome 121+ on Android, and Safari 26 / Firefox 141+.</p>
+        <p>If you are on a supported browser, check that hardware acceleration is on (chrome://settings/system) and that the page is served over http://localhost or https.</p>
+      </div>
+    </div>
+  </div>
+</div>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

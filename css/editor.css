@@ -1,0 +1,116 @@
+/* Editor: a highlighted <pre> under a transparent-text <textarea>. The two must share every
+   metric (font, line-height, padding, tab-size, white-space) so the caret sits on the colours. */
+
+.ed {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border-radius: 8px;
+  background: #0d1117;
+  color: #d6dde6;
+  font: 13px/1.5 "Cascadia Code", "JetBrains Mono", Consolas, "Fira Code", monospace;
+  tab-size: 2;
+  /* ligatures would fuse `->` in the textarea but not across highlight spans: off on both */
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "calt" 0;
+  letter-spacing: 0;
+  text-align: left;
+}
+
+.ed-gutter {
+  flex: none;
+  box-sizing: border-box;
+  min-width: 2ch;
+  padding: 10px 8px calc(10px + var(--ed-sbh, 0px)) 8px;
+  overflow: hidden;
+  font: inherit;
+  white-space: pre;
+  text-align: right;
+  color: #4b5563;
+  background: #0a0d12;
+  border-right: 1px solid #1f2937;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.ed-gutter > div.ed-err {
+  color: #ff6b6b;
+  background: rgba(255, 90, 90, .16);
+}
+
+.ed-body {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.ed-hl,
+.ed-ta {
+  position: absolute;
+  inset: 0;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 10px 12px;
+  font: 13px/1.5 "Cascadia Code", "JetBrains Mono", Consolas, "Fira Code", monospace;
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "calt" 0;
+  letter-spacing: 0;
+  tab-size: 2;
+  white-space: pre;
+  overflow-wrap: normal;
+  word-break: normal;
+  text-align: left;
+}
+
+.ed-hl {
+  overflow: hidden;
+  color: #d6dde6;
+  background: #0d1117;
+}
+.ed-hl code {
+  font: inherit;
+  display: block;
+  box-sizing: content-box;
+  min-width: 100%;
+  width: max-content;
+  /* the textarea's scrollbars shrink its client box; give the pre the same extra reach */
+  padding: 0 var(--ed-sbw, 0px) var(--ed-sbh, 0px) 0;
+}
+.ed-line {
+  display: block;
+}
+.ed-line.ed-err {
+  background: rgba(255, 90, 90, .16);
+}
+
+.ed-ta {
+  display: block;
+  overflow: auto;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  background: transparent;
+  border: 0;
+  outline: 0;
+  resize: none;
+  caret-color: #ffffff;
+  scrollbar-width: thin;
+  scrollbar-color: #2b3440 transparent;
+}
+.ed-ta::selection {
+  background: rgba(97, 175, 239, .35);
+  color: transparent;
+}
+.ed-ta::-webkit-scrollbar { width: 8px; height: 8px; }
+.ed-ta::-webkit-scrollbar-thumb { background: #2b3440; border-radius: 4px; }
+.ed-ta::-webkit-scrollbar-track,
+.ed-ta::-webkit-scrollbar-corner { background: transparent; }
+
+/* tokens */
+.tk-cm  { color: #6b7a8c; font-style: italic; }
+.tk-kw  { color: #c678dd; }
+.tk-ty  { color: #56b6c2; }
+.tk-num { color: #d19a66; }
+.tk-fn  { color: #61afef; }
+.tk-lib { color: #98c379; }
+.tk-uni { color: #e5c07b; }
+.tk-op  { color: #abb2bf; }

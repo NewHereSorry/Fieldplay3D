@@ -1,0 +1,268 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>editor checks</title>
+<link rel="stylesheet" href="../css/editor.css">
+<style>
+  body { margin: 0; padding: 16px; background: #05070a; color: #c9d1d9; font: 13px/1.5 Consolas, monospace; }
+  #host { width: 600px; height: 320px; border: 1px solid #1f2937; }
+  #scratch { position: absolute; left: -9999px; top: 0; width: 300px; height: 120px; }
+  #out { margin-top: 12px; white-space: pre-wrap; }
+  .p { color: #98c379; } .f { color: #ff6b6b; } .d { color: #e5c07b; font-weight: bold; }
+</style>
+<div id="host"></div>
+<div id="scratch"></div>
+<pre id="out">running…</pre>
+<script type="module">
+import { Editor, highlight } from '../js/editor.js';
+
+const SAMPLE = `// Velocity field: a curl-noise swirl that breathes with u.time
+fn get_velocity(p: vec3f) -> vec3f {
+  let t = u.time * 0.5;
+  let k = 2u;
+  var v = curl(p * 2.0 + vec3f(0.0, t, 0.0));
+  let r = length(p.xz);
+  /* keep the core calm */
+  if (r < 1e-3) { return vec3f(0.0); }
+  let n = noise(p * 2.0) * 0.5;
+  v += vec3f(-p.z, 0.0, p.x) * (1.0 - smoothstep(0.0, 2.0, r));
+  return normalize(v) * clamp(n + 0.5, 0.1, 1.0);
+}`;
+
+if (document.readyState !== 'complete') await new Promise(r => addEventListener('load', r));
+
+const out = document.getElementById('out');
+const host = document.getElementById('host');
+const lines = [];
+let pass = 0, total = 0;
+const eq = (a, b, what) => { if (a !== b) throw new Error(`${what}: ${JSON.stringify(a)} !== ${JSON.stringify(b)}`); };
+const ok = (c, what) => { if (!c) throw new Error(what); };
+function check(name, fn) {
+  total++;
+  try { fn(); pass++; lines.push(`<span class="p">PASS</span> ${name}`); }
+  catch (e) { lines.push(`<span class="f">FAIL</span> ${name}: ${String(e.message || e).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c])}`); }
+}
+const key = (el, init) => { const e = new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init }); el.dispatchEvent(e); return e; };
+
+let changed = null, submitted = null;
+const ed = new Editor(host, { value: SAMPLE, onChange: v => { changed = v; }, onSubmit: v => { submitted = v; } });
+const ta = host.querySelector('textarea.ed-ta');
+const pre = host.querySelector('pre.ed-hl');
+const code = pre.querySelector('code');
+const gutter = host.querySelector('.ed-gutter');
+const text = () => code.textContent;
+
+check('structure', () => {
+  const root = host.firstElementChild;
+  eq(root.className, 'ed', 'root');
+  eq(root.children[0].className, 'ed-gutter', 'gutter');
+  eq(root.children[1].className, 'ed-body', 'body');
+  ok(ta && pre && code, 'pre/code/textarea present');
+  eq(ta.getAttribute('wrap'), 'off', 'wrap');
+  eq(ta.spellcheck, false, 'spellcheck');
+});
+
+check('value roundtrip', () => eq(ed.value, SAMPLE, 'value'));
+
+check('token spans present', () => {
+  const want = { 'tk-cm': '// Velocity', 'tk-kw': 'fn', 'tk-ty': 'vec3f', 'tk-num': '0.5', 'tk-fn': 'length', 'tk-lib': 'curl', 'tk-uni': 'u.time', 'tk-op': '*' };
+  for (const [cls, sample] of Object.entries(want)) {
+    const els = [...code.querySelectorAll('.' + cls)];
+    ok(els.length, `no .${cls} spans`);
+    ok(els.some(e => e.textContent.startsWith(sample)), `.${cls} has no span starting with ${JSON.stringify(sample)}`);
+  }
+  const nums = [...code.querySelectorAll('.tk-num')].map(e => e.textContent);
+  for (const n of ['0.5', '2u', '1e-3', '2.0']) ok(nums.includes(n), `number ${n} not tokenized (got ${nums.join(' ')})`);
+  ok([...code.querySelectorAll('.tk-cm')].some(e => e.textContent === '/* keep the core calm */'), 'block comment');
+  ok([...code.querySelectorAll('.tk-lib')].some(e => e.textContent === 'get_velocity'), 'get_velocity as lib');
+  ok(![...code.querySelectorAll('[class^=tk-]')].some(e => e.textContent === 'p'), 'plain identifier p must not get a token class');
+});
+
+check('highlighted text == value + newline', () => eq(text(), ta.value + '\n', 'textContent'));
+
+check('one ed-line per line, one gutter div per line', () => {
+  const n = SAMPLE.split('\n').length;
+  eq(code.querySelectorAll('.ed-line').length, n, 'ed-line count');
+  eq(gutter.children.length, n, 'gutter count');
+  eq(gutter.children[n - 1].textContent, String(n), 'last gutter number');
+});
+
+check('setErrors marks line 2 and clears', () => {
+  ed.setErrors([{ line: 2, message: 'boom' }]);
+  const g = gutter.children[1], l = code.querySelectorAll('.ed-line')[1];
+  ok(g.classList.contains('ed-err'), 'gutter line 2 lacks ed-err');
+  ok(g.title.includes('boom'), 'gutter title lacks boom');
+  ok(l.classList.contains('ed-err'), 'highlighted line 2 lacks ed-err');
+  ok(l.title.includes('boom'), 'line title lacks boom');
+  ok(!gutter.children[0].classList.contains('ed-err'), 'line 1 wrongly marked');
+  ed.setErrors([]);
+  eq(host.querySelectorAll('.ed-err').length, 0, 'ed-err left after clear');
+  ok(!g.title, 'gutter title left after clear');
+});
+
+check('errors survive a re-render', () => {
+  ed.setErrors([{ line: 3, message: 'late' }]);
+  ed.value = ed.value;
+  ok(gutter.children[2].classList.contains('ed-err') && code.children[2].classList.contains('ed-err'), 'line 3 lost its mark');
+  ed.setErrors([]);
+});
+
+check('pre and textarea share metrics', () => {
+  const a = getComputedStyle(pre), b = getComputedStyle(ta);
+  for (const p of ['fontFamily', 'fontSize', 'fontWeight', 'fontStyle', 'lineHeight', 'letterSpacing', 'tabSize', 'whiteSpace', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft', 'marginTop', 'marginLeft'])
+    eq(a[p], b[p], p);
+  eq(a.paddingTop, '10px', 'padding-top'); eq(a.paddingLeft, '12px', 'padding-left');
+  eq(a.fontSize, '13px', 'font-size');
+  eq(pre.scrollHeight, ta.scrollHeight, 'scrollHeight');
+  eq(pre.getBoundingClientRect().left, ta.getBoundingClientRect().left, 'left');
+  eq(pre.getBoundingClientRect().top, ta.getBoundingClientRect().top, 'top');
+  const c = getComputedStyle(code);
+  eq(c.fontFamily, a.fontFamily, 'code font-family'); eq(c.fontSize, a.fontSize, 'code font-size');
+});
+
+check('tall content: scroll extents match and the scroll copies', () => {
+  const keep = ed.value;
+  const tall = Array.from({ length: 60 }, (_, i) => `  let a${i} = vec3f(${i}.0, 0.5, 1e-3) * u.time; // a long line to force the horizontal bar as well .......... ${i}`).join('\n');
+  ed.value = tall;
+  ok(ta.scrollHeight > ta.clientHeight, 'no vertical overflow');
+  ok(ta.scrollWidth > ta.clientWidth, 'no horizontal overflow');
+  // the textarea's scrollbars shrink its client box, so compare how far each can scroll, not raw scrollHeight
+  eq(pre.scrollHeight - pre.clientHeight, ta.scrollHeight - ta.clientHeight, 'max scrollTop (tall)');
+  // Chrome's textarea leaves its right padding out of scrollWidth; the pre only has to reach at least as far
+  ok(pre.scrollWidth - pre.clientWidth >= ta.scrollWidth - ta.clientWidth, `pre cannot follow scrollLeft: ${pre.scrollWidth - pre.clientWidth} < ${ta.scrollWidth - ta.clientWidth}`);
+  ta.scrollTop = 1e6; ta.scrollLeft = 1e6;
+  ta.dispatchEvent(new Event('scroll'));
+  ok(ta.scrollTop > 0, 'textarea did not scroll');
+  eq(pre.scrollTop, ta.scrollTop, 'pre scrollTop at the bottom');
+  eq(pre.scrollLeft, ta.scrollLeft, 'pre scrollLeft at the right');
+  eq(gutter.scrollTop, ta.scrollTop, 'gutter scrollTop at the bottom');
+  ta.scrollTop = 0; ta.scrollLeft = 0; ta.dispatchEvent(new Event('scroll'));
+  ed.value = keep;
+  eq(pre.scrollHeight, ta.scrollHeight, 'scrollHeight after restore');
+});
+
+check('Tab inserts two spaces at the caret', () => {
+  ed.value = 'ab\ncd';
+  ed.focus();
+  ta.setSelectionRange(1, 1);
+  const e = key(ta, { key: 'Tab', code: 'Tab' });
+  ok(e.defaultPrevented, 'Tab not prevented');
+  eq(ta.value, 'a  b\ncd', 'value');
+  eq(ta.selectionStart, 3, 'caret'); eq(ta.selectionEnd, 3, 'caret end');
+  eq(text(), ta.value + '\n', 'highlight refreshed');
+});
+
+check('Tab / Shift+Tab over a multi-line selection indent and unindent', () => {
+  ed.value = 'a\nb\nc';
+  ed.focus();
+  ta.setSelectionRange(0, 3);
+  key(ta, { key: 'Tab', code: 'Tab' });
+  eq(ta.value, '  a\n  b\nc', 'indent');
+  eq(ta.selectionStart, 2, 'sel start'); eq(ta.selectionEnd, 7, 'sel end');
+  key(ta, { key: 'Tab', code: 'Tab', shiftKey: true });
+  eq(ta.value, 'a\nb\nc', 'unindent');
+  eq(ta.selectionStart, 0, 'sel start back'); eq(ta.selectionEnd, 3, 'sel end back');
+});
+
+check('Enter keeps indentation and indents after {', () => {
+  ed.value = '  let x = 1;';
+  ed.focus(); ta.setSelectionRange(ta.value.length, ta.value.length);
+  key(ta, { key: 'Enter', code: 'Enter' });
+  eq(ta.value, '  let x = 1;\n  ', 'kept indent');
+  ed.value = 'fn f() {}';
+  ed.focus(); ta.setSelectionRange(8, 8);
+  key(ta, { key: 'Enter', code: 'Enter' });
+  eq(ta.value, 'fn f() {\n  \n}', 'brace pair');
+  eq(ta.selectionStart, 11, 'caret inside the block');
+});
+
+check('Ctrl+/ toggles // on the selected lines', () => {
+  ed.value = 'a\n  b\n\nc';
+  ed.focus(); ta.setSelectionRange(0, 5);
+  key(ta, { key: '/', code: 'Slash', ctrlKey: true });
+  eq(ta.value, '// a\n  // b\n\nc', 'commented');
+  key(ta, { key: '/', code: 'Slash', ctrlKey: true });
+  eq(ta.value, 'a\n  b\n\nc', 'uncommented');
+});
+
+check('Ctrl+Enter calls onSubmit', () => {
+  ed.value = 'zzz';
+  submitted = null;
+  const e = key(ta, { key: 'Enter', code: 'Enter', ctrlKey: true });
+  ok(e.defaultPrevented, 'not prevented');
+  eq(submitted, 'zzz', 'onSubmit value');
+});
+
+check('onChange fires on input, not on value set', () => {
+  changed = null;
+  ed.value = 'set';
+  eq(changed, null, 'onChange fired on value set');
+  ta.value = 'typed';
+  ta.dispatchEvent(new Event('input', { bubbles: true }));
+  eq(changed, 'typed', 'onChange value');
+  eq(text(), 'typed\n', 're-highlighted on input');
+});
+
+check('< & > and entities render exactly', () => {
+  const v = 'if (a < b && c > d) { x = a&b; } // <tag> & "q" && &lt;\n/* a<b\n>c */ vec3<f32>';
+  ed.value = v;
+  eq(text(), v + '\n', 'textContent');
+  ok([...code.querySelectorAll('.tk-op')].some(e => e.textContent === '<'), '< as operator');
+  ok([...code.querySelectorAll('.tk-op')].some(e => e.textContent === '&'), '& as operator');
+  eq(code.querySelectorAll('.ed-line').length, 3, 'three lines');
+  ok(code.querySelectorAll('.ed-line')[1].querySelector('.tk-cm'), 'block comment continues on line 2');
+});
+
+check('edge values: empty, trailing newline, lone newline', () => {
+  for (const v of ['', 'a\n', '\n', '\n\n', 'x\n\ny']) {
+    ed.value = v;
+    eq(text(), v + '\n', `textContent for ${JSON.stringify(v)}`);
+    eq(gutter.children.length, v.split('\n').length, `gutter lines for ${JSON.stringify(v)}`);
+    eq(pre.scrollHeight, ta.scrollHeight, `scrollHeight for ${JSON.stringify(v)}`);
+  }
+});
+
+check('highlight() never changes characters', () => {
+  const tmp = document.createElement('div');
+  for (const v of [SAMPLE, '/* open comment', '1.5f 2u .5 1e10 0x1Fu', 'u.time+u.dt', '&&||<<>>', 'a\tb']) {
+    tmp.innerHTML = highlight(v);
+    eq(tmp.textContent, v, JSON.stringify(v));
+  }
+});
+
+check('0x0 / hidden host does not throw', () => {
+  const s = document.getElementById('scratch');
+  const h0 = document.createElement('div'); h0.style.cssText = 'width:0;height:0'; s.appendChild(h0);
+  const h1 = document.createElement('div'); h1.style.display = 'none'; s.appendChild(h1);
+  for (const h of [h0, h1]) {
+    const e = new Editor(h, { value: 'fn f() {}' });
+    e.setErrors([{ line: 1, message: 'x' }]);
+    e.value = 'a\nb';
+    e.focus();
+    e.destroy();
+    eq(h.children.length, 0, 'destroy left DOM');
+  }
+});
+
+check('destroy removes DOM and listeners', () => {
+  const s = document.getElementById('scratch');
+  const h = document.createElement('div'); s.appendChild(h);
+  let n = 0;
+  const e = new Editor(h, { value: 'q', onChange: () => n++ });
+  const t = h.querySelector('textarea');
+  t.dispatchEvent(new Event('input', { bubbles: true }));
+  eq(n, 1, 'onChange before destroy');
+  e.destroy();
+  t.dispatchEvent(new Event('input', { bubbles: true }));
+  eq(n, 1, 'onChange after destroy');
+  eq(h.children.length, 0, 'DOM left');
+});
+
+// leave the sample on screen, with one marked line, for a look
+ed.value = SAMPLE;
+ed.setErrors([{ line: 8, message: 'demo: marked line' }]);
+ta.setSelectionRange(0, 0);
+
+lines.push(`<span class="d">DONE ${pass}/${total}</span>`);
+out.innerHTML = lines.join('\n');
+window.ED = ed;
+</script>

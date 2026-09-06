@@ -1,0 +1,14 @@
+<!doctype html><meta charset="utf-8"><title>gpu probe</title><pre id="o">probing…</pre>
+<script type="module">
+const o = document.getElementById('o');
+try {
+  if (!navigator.gpu) throw new Error('navigator.gpu missing');
+  const a = await navigator.gpu.requestAdapter();
+  if (!a) throw new Error('no adapter');
+  const info = a.info || {};
+  const d = await a.requestDevice();
+  o.textContent = JSON.stringify({ok:true, vendor:info.vendor, arch:info.architecture, device:info.device, desc:info.description,
+    limits:{maxBuf:d.limits.maxBufferSize, maxSB:d.limits.maxStorageBufferBindingSize, wg:d.limits.maxComputeWorkgroupsPerDimension, inv:d.limits.maxComputeInvocationsPerWorkgroup},
+    fmt: navigator.gpu.getPreferredCanvasFormat(), features:[...a.features]}, null, 1);
+} catch (e) { o.textContent = 'FAIL: ' + e.message; }
+</script>
