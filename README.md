@@ -49,3 +49,13 @@ python fieldplay3d/tools/shot.py "http://localhost:5225/?preset=ring" soft.png -
 ## The field API
 
 `get_velocity(p)` gets the position, returns the velocity. Optional `get_color(p, v)`. Uniforms `u.time`, `u.frame`, `u.cursor`, `u.cursorDown`, `u.boundsMin`, `u.boundsMax`. Helpers `noise`, `noised`, `fbm`, `curl`, `hash3`, `hash1`, `rand3`, `rotateX/Y/Z`, `turbo`, `viridis`, `hsv2rgb`, `palette`, `PI`, `TAU`. The whole state (code, settings, camera) is deflated into the URL hash by the link button and autosaved to localStorage.
+
+## Live
+
+Deployed on Cloudflare Pages at **https://fieldplay3d.pages.dev** (project `fieldplay3d`, production branch `main`). Redeploy with:
+
+```
+python fieldplay3d/tools/deploy.py
+```
+
+(one-time `npx wrangler login` first; the OAuth page must be approved within two minutes.)
