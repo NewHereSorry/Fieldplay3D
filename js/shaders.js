@@ -14,7 +14,8 @@ export const SIM = layout('Uniforms', [
   ['cursorDown', 'f32'], ['colorScale', 'f32'], ['palette', 'u32'], ['reset', 'u32'],
   ['spawn', 'u32'], ['fadeLife', 'f32'], ['beat', 'f32'], ['phase', 'f32'],
   ['audio', 'vec4f'],
-  ['bpm', 'f32'], ['pad0', 'f32'], ['pad1', 'f32'], ['pad2', 'f32'],
+  ['bpm', 'f32'], ['cursorForce', 'f32'], ['cursorRadius', 'f32'], ['cursorMode', 'u32'],
+  ['cursorAxis', 'vec3f'], ['pad0', 'f32'],
 ]);
 
 export const REN = layout('RenderUniforms', [
@@ -159,7 +160,24 @@ ${LIB}
 const SIM_SUFFIX = /* wgsl */`
 // ---- end of your field ----
 
-fn field(p: vec3f) -> vec3f { return get_velocity(p) * u.speed; }
+// The field, plus whatever the cursor is doing to it. The cursor's push is proportional to the
+// local flow, so one strength reads the same in a swirl and in a Lorenz attractor, and it is
+// inside field() so every integrator stage sees it.
+fn field(p: vec3f) -> vec3f {
+  var v = get_velocity(p) * u.speed;
+  if (u.cursorMode != 0u) {
+    let toC = u.cursor - p;
+    let d2 = dot(toC, toC);
+    let dir = toC * inverseSqrt(max(d2, 1e-12));
+    let push = u.cursorForce * length(v) * exp(-d2 / max(u.cursorRadius * u.cursorRadius, 1e-8));
+    switch u.cursorMode {
+      case 1u: { v += dir * push; }
+      case 2u: { v -= dir * push; }
+      default: { v += cross(dir, u.cursorAxis) * push; }
+    }
+  }
+  return v;
+}
 
 fn advance(p: vec3f, k1: vec3f, dt: f32) -> vec3f {
   switch u.integrator {

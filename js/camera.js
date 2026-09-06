@@ -31,7 +31,7 @@ export class OrbitCamera {
     this.view = new Float32Array(16); this.proj = new Float32Array(16); this.viewProj = new Float32Array(16);
     this.aspect = 1;
     this._motion = 0; this._last = null;
-    this.punch = 1; this.viewDist = this.dist;             // punch: transient zoom (the beat), never persisted
+    this.punch = 1; this.viewDist = this.dist; this.dragging = false;             // punch: transient zoom (the beat), never persisted
     this.onChange = null;
   }
 
@@ -94,6 +94,7 @@ export class OrbitCamera {
   // Pointer + wheel + pinch on an element. Left drag rotates, right/middle/shift drag pans, wheel zooms.
   attach(el) {
     const ptrs = new Map(); let mode = 0, lx = 0, ly = 0, pinch = 0;
+    const drag = () => { this.dragging = ptrs.size > 0; };
     const centre = () => { let x = 0, y = 0; for (const p of ptrs.values()) { x += p.x; y += p.y; } return [x / ptrs.size, y / ptrs.size]; };
     const span = () => { const a = [...ptrs.values()]; return a.length < 2 ? 0 : Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y); };
     el.addEventListener('pointerdown', e => {
@@ -101,7 +102,7 @@ export class OrbitCamera {
       el.setPointerCapture(e.pointerId);
       ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
       mode = (e.button === 0 && !e.shiftKey && !e.ctrlKey) ? 1 : 2;
-      [lx, ly] = centre(); pinch = span();
+      [lx, ly] = centre(); pinch = span(); drag();
     });
     el.addEventListener('pointermove', e => {
       if (!ptrs.has(e.pointerId)) return;
@@ -114,7 +115,7 @@ export class OrbitCamera {
       else if (mode === 2) this.pan((cx - lx) / h, (cy - ly) / h);
       lx = cx; ly = cy;
     });
-    const end = e => { ptrs.delete(e.pointerId); if (!ptrs.size) mode = 0; else { [lx, ly] = centre(); pinch = span(); } };
+    const end = e => { ptrs.delete(e.pointerId); if (!ptrs.size) mode = 0; else { [lx, ly] = centre(); pinch = span(); } drag(); };
     el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end);
     el.addEventListener('wheel', e => { e.preventDefault(); this.zoom(Math.exp(Math.sign(e.deltaY) * 0.12)); }, { passive: false });
     el.addEventListener('contextmenu', e => e.preventDefault());

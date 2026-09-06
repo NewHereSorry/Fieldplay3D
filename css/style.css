@@ -35,6 +35,8 @@ button, select, input { font: inherit; color: inherit; }
 .grow { flex: 1; }
 .row { display: flex; gap: 8px; padding: 4px 12px 8px; }
 .row select { flex: 1; min-width: 0; }
+.row optgroup { font-style: normal; color: var(--dim); }
+.row optgroup option { color: var(--ink); }
 
 select, button {
   background: #161c25; border: 1px solid #263244; border-radius: 6px; padding: 5px 10px; cursor: pointer;

@@ -154,6 +154,10 @@ export class Engine {
       w.set('colorScale', S.colorScale); w.set('palette', S.palette); w.set('spawn', S.spawn);
       w.set('fadeLife', 0.15);
       w.set('audio', ctl.audio || ZERO4); w.set('beat', ctl.beat || 0); w.set('phase', ctl.phase || 0); w.set('bpm', ctl.bpm || 0);
+      // Cursor radius is a fraction of the box, so it means the same thing in every preset.
+      w.set('cursorMode', ctl.cursorMode || 0); w.set('cursorForce', S.cursorForce);
+      w.set('cursorRadius', S.cursorRadius * 0.5 * Math.hypot(S.box.s[0], S.box.s[1], S.box.s[2]));
+      w.set('cursorAxis', cam.Z);
       for (let s = 0; s < steps; s++) {
         w.set('dt', dt); w.set('time', this.time); w.set('frame', this.frameIndex);
         w.set('seed', (this.seed = (this.seed + 0x9E3779B9) >>> 0)); w.set('substep', s);

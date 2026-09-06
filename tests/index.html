@@ -12,6 +12,7 @@ import { randomField } from '../js/random.js';
 import { encodeState, decodeState, freshState } from '../js/state.js';
 import { OrbitCamera } from '../js/camera.js';
 import { Pulse, sampleAnalysis, decodeBands } from '../js/audio.js';
+import * as library from '../js/library.js';
 
 const out = document.getElementById('out');
 let n = 0, m = 0;
@@ -22,7 +23,7 @@ out.textContent = '';
 
 // Uniform layouts follow WGSL's rules (vec3 aligns to 16, occupies 12).
 const f = SIM.fields;
-check('SIM layout', f.boundsMin.off === 0 && f.dt.off === 3 && f.boundsMax.off === 4 && f.time.off === 7 && f.cursor.off === 8 && f.count.off === 16 && f.fadeLife.off === 29 && f.beat.off === 30 && f.audio.off === 32 && f.bpm.off === 36 && SIM.size === 160,
+check('SIM layout', f.boundsMin.off === 0 && f.dt.off === 3 && f.boundsMax.off === 4 && f.time.off === 7 && f.cursor.off === 8 && f.count.off === 16 && f.fadeLife.off === 29 && f.beat.off === 30 && f.audio.off === 32 && f.bpm.off === 36 && f.cursorMode.off === 39 && f.cursorAxis.off === 40 && SIM.size === 176,
   JSON.stringify(Object.fromEntries(Object.entries(f).map(([k, v]) => [k, v.off]))) + ' size ' + SIM.size);
 const g = REN.fields;
 check('REN layout', g.viewProj.off === 0 && g.eye.off === 16 && g.fog.off === 19 && g.viewport.off === 20 && g.width.off === 22 && REN.size === 112, JSON.stringify(g) + ' size ' + REN.size);
@@ -34,6 +35,31 @@ const S1 = await decodeState(enc);
 check('state roundtrip', JSON.stringify(S0) === JSON.stringify(S1), enc.slice(0, 40));
 check('share link is compact', enc.length < 1200, enc.length + ' chars');
 check('share link is url-safe', /^[A-Za-z0-9_-]+$/.test(enc), enc.slice(0, 40));
+
+// The library: the user's own fields, keyed by name, holding whole states.
+{
+  const before = localStorage.getItem('fieldplay3d.library');
+  localStorage.removeItem('fieldplay3d.library');
+  check('library: starts empty', library.list().length === 0);
+  library.save('Zephyr', enc);
+  const one = library.save('Anvil', 'other-state');
+  check('library: save returns the entry', one && one.name === 'Anvil' && one.saved > 0, JSON.stringify(one));
+  check('library: two saved, sorted by name', library.list().map(e => e.name).join() === 'Anvil,Zephyr', library.list().map(e => e.name).join());
+  check('library: a saved state is the share string', library.find('Zephyr').state === enc);
+  library.save('Zephyr', 'replaced');
+  check('library: the same name replaces, never duplicates', library.list().length === 2 && library.find('Zephyr').state === 'replaced', library.list().length);
+  check('library: a name is trimmed and an empty one refused', library.save('  Padded  ', 'x').name === 'Padded' && library.save('   ', 'x') === null);
+  check('library: what was saved survives a fresh read', JSON.parse(localStorage.getItem('fieldplay3d.library')).length === 3);
+  library.remove('Anvil'); library.remove('Padded');
+  check('library: remove takes one out and leaves the rest', library.list().map(e => e.name).join() === 'Zephyr', library.list().map(e => e.name).join());
+  check('library: an unknown name is null, not a throw', library.find('nope') === null);
+  const decoded = await decodeState(library.find('Zephyr') && enc);
+  check('library: a saved state decodes back to the state it came from', JSON.stringify(decoded) === JSON.stringify(S0));
+  localStorage.setItem('fieldplay3d.library', '{ not an array');
+  check('library: unreadable storage reads as empty', library.list().length === 0);
+  library.remove('Zephyr');
+  if (before === null) localStorage.removeItem('fieldplay3d.library'); else localStorage.setItem('fieldplay3d.library', before);
+}
 
 // Pulse: sampling a beat map at the player's clock.
 {
@@ -133,5 +159,38 @@ check('particles spread out', distinct.size > 780, distinct.size + ' distinct x 
 check('particles coloured', lit === 1024, lit);
 check('trail texture holds light', texel > 100, texel + ' nonzero words');
 check('sim time advanced (the reset frame does not integrate)', Math.abs(engine.time - 29 * S.dt) < 1e-6, engine.time);
+
+// The cursor: hovering bends the flow toward the pointer. Same field, same frames, cursor off
+// against cursor pulling — how many particles end up near the point it sits on.
+{
+  const read = dev.createBuffer({ size: 1024 * 16, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+  const near = async (mode, force) => {
+    const C = freshState(); C.colorLin = [1, 1, 1]; C.bgLin = [0, 0, 0];
+    C.cursorForce = force; C.cursorRadius = 1.5;
+    const cam3 = new OrbitCamera(); cam3.dist = 6; cam3.update(1, 0);
+    const c = { cursor: [0, 0, 0], cursorDown: 0, motion: 0, paused: false, dpr: 1, cursorMode: mode };
+    engine.seed = 1; engine.reset();
+    for (let i = 0; i < 240; i++) engine.frame(C, cam3, c);
+    const e3 = dev.createCommandEncoder();
+    e3.copyBufferToBuffer(engine.posB, 0, read, 0, 1024 * 16);
+    dev.queue.submit([e3.finish()]);
+    await read.mapAsync(GPUMapMode.READ);
+    const q = new Float32Array(read.getMappedRange());
+    let hits = 0, worst = 0;
+    for (let i = 0; i < 1024; i++) {
+      const d = Math.hypot(q[i * 4], q[i * 4 + 1], q[i * 4 + 2]);
+      if (d < 0.5) hits++;
+      worst = Math.max(worst, d);
+    }
+    read.unmap();
+    return { hits, worst };
+  };
+  const off = await near(0, 1.5), pull = await near(1, 4), push = await near(2, 4);
+  check('cursor: pulling gathers particles at the pointer', pull.hits > off.hits * 2, `${pull.hits} near vs ${off.hits} with it off`);
+  check('cursor: pushing clears them away from it', push.hits < off.hits, `${push.hits} near vs ${off.hits} with it off`);
+  check('cursor: the force never throws a particle out of the box', pull.worst < 2.61 && push.worst < 2.61, `${pull.worst.toFixed(2)} / ${push.worst.toFixed(2)} from centre, box half-diagonal 2.60`);
+  const swirl = await near(3, 4);
+  check('cursor: swirling keeps them in the box too', swirl.worst < 2.61 && isFinite(swirl.worst), swirl.worst);
+}
 done();
 </script>

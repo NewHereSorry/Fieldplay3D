@@ -6,6 +6,7 @@ import { PRESETS, byId } from './presets.js';
 import { randomField } from './random.js';
 import { SCHEMA, applyPreset, freshState, hexToLinear, encodeState, decodeState } from './state.js';
 import { buildSettings, toast, download } from './ui.js';
+import * as library from './library.js';
 import { Pulse } from './audio.js';
 
 const $ = s => document.querySelector(s);
@@ -39,7 +40,7 @@ async function boot() {
   let compileTimer = 0;
   const editor = new Editor($('#editor'), {
     value: S.code,
-    onChange: v => { S.code = v; if (S.preset !== 'custom') { S.preset = 'custom'; presetSel.value = 'custom'; } scheduleCompile(); persist(); },
+    onChange: v => { S.code = v; if (S.preset !== 'custom') { S.preset = 'custom'; fillPresets(); } scheduleCompile(); persist(); },
     onSubmit: () => compile(),
   });
   function scheduleCompile() { clearTimeout(compileTimer); compileTimer = setTimeout(compile, 300); status.textContent = '…'; status.className = 'status busy'; }
@@ -60,21 +61,74 @@ async function boot() {
     return r.ok;
   }
 
-  // ---- presets ----
+  // ---- presets and the fields you saved yourself ----
   const presetSel = $('#preset');
-  for (const p of PRESETS) { const o = document.createElement('option'); o.value = p.id; o.textContent = p.name; presetSel.append(o); }
-  const custom = document.createElement('option'); custom.value = 'custom'; custom.textContent = 'Custom'; presetSel.append(custom);
-  presetSel.value = byId(S.preset) ? S.preset : 'custom';
-  presetSel.addEventListener('change', () => { const p = byId(presetSel.value); if (p) loadPreset(p); });
-  function loadPreset(p) {
-    applyPreset(S, p);
+  const group = (label, items) => {
+    if (!items.length) return null;
+    const g = document.createElement('optgroup'); g.label = label;
+    for (const [value, text] of items) { const o = document.createElement('option'); o.value = value; o.textContent = text; g.append(o); }
+    presetSel.append(g);
+    return g;
+  };
+  function fillPresets() {
+    presetSel.replaceChildren();
+    group('Saved', library.list().map(e => [library.PREFIX + e.name, e.name]));
+    group('Presets', PRESETS.map(p => [p.id, p.name]));
+    const own = document.createElement('option');
+    own.value = 'custom'; own.textContent = 'Custom (unsaved)'; presetSel.append(own);
+    presetSel.value = known(S.preset) ? S.preset : 'custom';
+    const saved = presetSel.value.startsWith(library.PREFIX);
+    $('#btn-forget').hidden = !saved;
+    $('#btn-save').title = saved ? 'Save over it, or under a new name' : 'Save this field';
+  }
+  const known = id => !!byId(id) || (id.startsWith(library.PREFIX) && !!library.find(id.slice(library.PREFIX.length)));
+  fillPresets();
+  presetSel.addEventListener('change', () => {
+    const id = presetSel.value;
+    if (id.startsWith(library.PREFIX)) loadSaved(id.slice(library.PREFIX.length));
+    else { const p = byId(id); if (p) loadPreset(p); }
+  });
+
+  // Everything a load has to do, however the state was made.
+  function adopt() {
+    S.colorLin = S.colorLin || [0, 0, 0]; S.bgLin = S.bgLin || [0, 0, 0];
     editor.value = S.code; applyCam(); settings.refresh();
     engine.setCount(1 << S.count); engine.reset();
+    startPulse();
     compile(); persist();
   }
+  function loadPreset(p) { applyPreset(S, p); adopt(); }
+  async function loadSaved(name) {
+    const entry = library.find(name);
+    if (!entry) { fillPresets(); return; }
+    try {
+      const next = await decodeState(entry.state);
+      Object.assign(S, next); S.preset = library.PREFIX + name;
+      adopt(); fillPresets();
+    } catch (e) { toast('That saved field could not be read'); }
+  }
+
   $('#btn-random').addEventListener('click', () => {
-    S.code = randomField(); S.preset = 'custom'; presetSel.value = 'custom';
-    editor.value = S.code; engine.reset(); compile(); persist();
+    S.code = randomField(); S.preset = 'custom'; presetSel.value = 'custom'; fillPresets();
+    engine.reset(); editor.value = S.code; compile(); persist();
+  });
+  $('#btn-save').addEventListener('click', async () => {
+    const current = S.preset.startsWith(library.PREFIX) ? S.preset.slice(library.PREFIX.length) : '';
+    const suggested = current || (byId(S.preset) ? byId(S.preset).name + ' (mine)' : 'My field');
+    const name = prompt('Save this field as:', suggested);
+    if (name === null) return;
+    S.cam = cam.state;
+    const entry = library.save(name, await encodeState({ ...S, preset: 'custom' }));
+    if (!entry) { toast(name.trim() ? 'This browser would not store it' : 'That needs a name'); return; }
+    S.preset = library.PREFIX + entry.name; fillPresets(); persist();
+    toast(`Saved as “${entry.name}”`);
+  });
+  $('#btn-forget').addEventListener('click', () => {
+    const name = S.preset.slice(library.PREFIX.length);
+    if (!confirm(`Forget “${name}”? The field itself stays on screen.`)) return;
+    library.remove(name);
+    S.preset = 'custom'; fillPresets(); persist();
+    toast(`Forgot “${name}”`);
   });
 
   // ---- settings panel ----
@@ -156,13 +210,15 @@ async function boot() {
   });
 
   // ---- cursor uniform ----
-  const mouse = { x: 0, y: 0, down: 0 };
-  canvas.addEventListener('pointermove', e => { mouse.x = e.clientX; mouse.y = e.clientY; });
+  const mouse = { x: 0, y: 0, down: 0, over: 0 };
+  canvas.addEventListener('pointermove', e => { mouse.x = e.clientX; mouse.y = e.clientY; mouse.over = 1; });
+  canvas.addEventListener('pointerenter', () => { mouse.over = 1; });
+  canvas.addEventListener('pointerleave', () => { mouse.over = 0; });
   canvas.addEventListener('pointerdown', e => { mouse.x = e.clientX; mouse.y = e.clientY; mouse.down = 1; });
   window.addEventListener('pointerup', () => { mouse.down = 0; });
 
   // ---- frame loop ----
-  const ctl = { cursor: [0, 0, 0], cursorDown: 0, motion: 0, paused: false, dpr: 1, audio: [0, 0, 0, 0], beat: 0, phase: 0, bpm: 0, speedMul: 1, glowMul: 1 };
+  const ctl = { cursor: [0, 0, 0], cursorDown: 0, motion: 0, paused: false, dpr: 1, audio: [0, 0, 0, 0], beat: 0, phase: 0, bpm: 0, speedMul: 1, glowMul: 1, cursorMode: 0 };
   const stats = $('#stats');
   let last = performance.now(), fpsT = 0, fpsN = 0, running = true;
   function fit() {
@@ -185,6 +241,8 @@ async function boot() {
     hexToLinear(S.color, S.colorLin); hexToLinear(S.bg, S.bgLin);
     cam.cursorOnPlane(mouse.x, mouse.y, canvas.clientWidth, canvas.clientHeight, ctl.cursor);
     ctl.cursorDown = mouse.down; ctl.motion = cam.motion / Math.max(dt, 1e-3); ctl.paused = paused;
+    // The cursor bends the flow while it hovers; a drag belongs to the camera, so it stops there.
+    ctl.cursorMode = (mouse.over && !cam.dragging) ? S.cursorMode : 0;
     engine.frame(S, cam, ctl);
     fpsN++; fpsT += dt;
     if (fpsT >= 0.5) {
@@ -197,7 +255,7 @@ async function boot() {
   requestAnimationFrame(loop);
 
   // Harness for scripted verification (screenshots with a hidden pane, tests).
-  window.FP = { S, engine, cam, editor, compile, loadPreset, presets: PRESETS, pulse, settings,
+  window.FP = { S, engine, cam, editor, compile, loadPreset, loadSaved, library, mouse, presets: PRESETS, pulse, settings,
     frame: () => frame(performance.now()), pause: v => setPaused(v), stop: () => { running = false; }, run: () => { if (!running) { running = true; requestAnimationFrame(loop); } } };
 }
 

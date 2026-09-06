@@ -27,6 +27,7 @@ When the camera moves fast the fade drops to *Trail while orbiting* so the old t
 | `js/editor.js` | dependency-free WGSL editor (highlight overlay, gutter, error lines) |
 | `js/presets.js` | the gallery: attractors and analytic flows with their bounds, dt and camera |
 | `js/random.js` | seeded random-field grammar |
+| `js/library.js` | the fields you saved yourself: name → a whole state, in this browser |
 | `js/audio.js` | Pulse: Aux Cord clock + beat map sampling, or live Web Audio analysis → bass/mid/high/level/beat/phase/bpm |
 | `js/state.js` | defaults, the settings schema the panel is built from, share-link codec |
 | `js/ui.js` | schema → panel rows, toast, download |
@@ -54,6 +55,14 @@ python fieldplay3d/tools/shot.py "http://localhost:5225/?preset=ring" soft.png -
 ## Pulse — sync to music
 
 The *Pulse* group in the panel drives the look from music: **Aux Cord bot** polls the bot's localhost endpoint (`GET /now` for the player's rate-aware clock, `GET /analysis?key=` for the track's 50 Hz band timeline + beat map, made by `dashcord/bots/aux-cord/auxcord/pulse.py`) and samples it at the moment the room hears, with a *Sync offset* for Discord's latency; **Shared audio** / **Microphone** analyse live sound in the browser (Web Audio, adaptive band peaks, a bass-onset beat detector). Either way `js/audio.js` produces bass/mid/high/level, a decaying `beat`, `phase` and `bpm`; the knobs punch speed, exposure and a camera zoom on the beat, and the field sees `u.audio`, `u.beat`, `u.phase`, `u.bpm`. The "Pulse (sync to music)" preset shows the idiom. Without Discord: `python -m auxcord.pulse song.mp3` (from the bot folder) serves one file's pulse on 5226.
+
+## Saving your own
+
+💾 stores the whole state — field, settings and camera — in this browser under a name, and it joins the picker under *Saved*; the same name replaces, 🗑 forgets the selected one. A saved entry holds the same deflated string the 🔗 link carries, so `library.save(name, await encodeState(S))` and the share link are one format. Storage key `fieldplay3d.library`.
+
+## The cursor
+
+Hovering bends the flow toward the pointer by default (*Cursor → Hovering*: pulls, pushes, swirls or does nothing; *Strength*, and *Reach* as a fraction of the box). It is applied inside `field()`, so every integrator stage sees it, and it is proportional to the local speed — one strength reads the same in a gentle swirl and in a Lorenz attractor. Dragging belongs to the camera, so the force stops while you orbit, and it is off whenever the pointer leaves the canvas.
 
 ## Live
 

@@ -22,7 +22,9 @@
 
     <div class="row">
       <select id="preset" title="Preset"></select>
-      <button id="btn-random" title="Generate a random field">⚄ Random</button>
+      <button id="btn-random" title="Generate a random field">🎲</button>
+      <button id="btn-save" title="Save this field">💾</button>
+      <button id="btn-forget" title="Forget this saved field" hidden>🗑</button>
     </div>
 
     <section class="field">
@@ -94,6 +96,10 @@
 <pre>return v * (1.0 + 2.0 * u.beat) + normalize(p) * u.audio.x;</pre>
         <h3>WGSL in one breath</h3>
         <p><code>let</code> is immutable, <code>var</code> mutable. Types are inferred: <code>let r = length(p);</code>. Vectors are <code>vec3f(x, y, z)</code> or <code>vec3f(0.0)</code>, swizzles work (<code>p.xz</code>). Write floats with a point (<code>2.0</code>) — a bare <code>var a = 2;</code> is an integer. Functions may be declared in any order. Ternaries are <code>select(ifFalse, ifTrue, cond)</code>.</p>
+        <h3>Saving your own</h3>
+        <p>💾 saves the whole state — the field, every setting and the camera — into this browser under a name you give it, and it joins the top of the picker under <em>Saved</em>. Saving with the same name replaces it; 🗑 forgets the one you have selected. A saved field lives in this browser only, so send one elsewhere with the 🔗 link, which carries the same state in the address.</p>
+        <h3>The cursor</h3>
+        <p>Hovering over the flow pulls it toward the pointer, by default. It is a bend rather than a shove — the push is proportional to the speed already there, so one strength reads the same in a gentle swirl and in a Lorenz attractor. <em>Cursor → Hovering</em> switches it to push or swirl, or turns it off; <em>Reach</em> is a fraction of the box. Dragging belongs to the camera, so the flow is left alone while you orbit.</p>
         <h3>Controls</h3>
         <table>
           <tr><td>drag</td><td>orbit</td></tr>

@@ -8,12 +8,13 @@ export const DEFAULTS = {
   fade: 0.96, fadeMoving: 0.8, shape: 0, width: 3, persp: 1, intensity: 0.12, exposure: 1.2, fog: 0.6,
   colorMode: 1, palette: 0, colorScale: 2, color: '#ffb347', bg: '#000000',
   box: { c: [0, 0, 0], s: [3, 3, 3] }, showBox: 1, autoRotate: 0, upAxis: 0,
+  cursorMode: 1, cursorForce: 1.5, cursorRadius: 0.3,
   pulseSource: 0, pulseUrl: 'http://localhost:5226', pulseOffset: 0, pulseDrive: 0, pulseSpeed: 1.5, pulseGlow: 0.8, pulseZoom: 0.25,
   cam: null,
 };
 
 // Keys a preset may override (everything but code/box/cam, which it always sets).
-const PRESET_KEYS = ['dt', 'speed', 'substeps', 'integrator', 'life', 'drop', 'spawn', 'fade', 'shape', 'width', 'intensity', 'exposure', 'fog', 'colorMode', 'palette', 'colorScale', 'color', 'bg', 'pulseDrive', 'pulseSpeed', 'pulseGlow', 'pulseZoom'];
+const PRESET_KEYS = ['dt', 'speed', 'substeps', 'integrator', 'life', 'drop', 'spawn', 'fade', 'shape', 'width', 'intensity', 'exposure', 'fog', 'colorMode', 'palette', 'colorScale', 'color', 'bg', 'cursorMode', 'cursorForce', 'cursorRadius', 'pulseDrive', 'pulseSpeed', 'pulseGlow', 'pulseZoom'];
 
 const trail = { to: x => 1 - 0.5 * (1 - x) ** 3, from: f => 1 - Math.cbrt(2 * (1 - f)) };
 const fmt3 = v => v >= 100 ? v.toFixed(0) : v >= 10 ? v.toFixed(1) : v.toPrecision(3).replace(/\.?0+$/, '');
@@ -43,6 +44,10 @@ export const SCHEMA = [
   { key: 'colorScale', label: 'Full-scale speed', type: 'range', min: 0.01, max: 2000, log: true, show: S => S.colorMode === 1, fmt: fmt3 },
   { key: 'color', label: 'Colour', type: 'color', show: S => S.colorMode === 0 || S.colorMode === 3 },
   { key: 'bg', label: 'Background', type: 'color' },
+  { group: 'Cursor' },
+  { key: 'cursorMode', label: 'Hovering', type: 'select', options: ['Does nothing', 'Pulls', 'Pushes', 'Swirls'] },
+  { key: 'cursorForce', label: 'Strength', type: 'range', min: 0.1, max: 8, log: true, show: S => S.cursorMode > 0, fmt: fmt3 },
+  { key: 'cursorRadius', label: 'Reach', type: 'range', min: 0.02, max: 1.5, step: 0.01, show: S => S.cursorMode > 0, fmt: v => v.toFixed(2) },
   { group: 'Pulse' },
   { key: 'pulseSource', label: 'Sync to', type: 'select', options: ['Off', 'Aux Cord bot', 'Shared audio', 'Microphone'] },
   { key: 'pulseUrl', label: 'Bot address', type: 'text', show: S => S.pulseSource === 1 },
