@@ -88,6 +88,39 @@ check('share link is url-safe', /^[A-Za-z0-9_-]+$/.test(enc), enc.slice(0, 40));
   check('pulse: paused music decays instead of jumping', p.A.beat < 1 && p.A.on === 0, p.A.beat);
 }
 
+// Permissions: the page asks the browser for nothing until a press in the Pulse panel says so.
+{
+  const asked = [];
+  const deny = kind => async () => { asked.push(kind); throw new DOMException('denied', 'NotAllowedError'); };
+  Object.defineProperty(navigator, 'mediaDevices', {
+    value: { getUserMedia: deny('mic'), getDisplayMedia: deny('capture') }, configurable: true });
+
+  const p = new Pulse();
+  p.update(1); p.update(2);
+  check('permissions: a Pulse that was never started asks for nothing', asked.length === 0, asked.join());
+  await p.setSource('off');
+  check('permissions: selecting Off asks for nothing', asked.length === 0 && p.source === 'off', asked.join());
+
+  const wanted = { ...freshState(), pulseSource: 2, pulseOn: true };
+  const link = await encodeState(wanted);
+  const back = await decodeState(link);
+  check('permissions: a link cannot carry "already listening"', back.pulseOn === false && back.pulseSource === 2,
+    JSON.stringify({ on: back.pulseOn, src: back.pulseSource }));
+  check('permissions: decoding one asks for nothing', asked.length === 0, asked.join());
+  library.save('Loud', link);
+  const saved = await decodeState(library.find('Loud').state);
+  check('permissions: a saved field cannot carry it either', saved.pulseOn === false, saved.pulseOn);
+  library.remove('Loud');
+
+  const started = await p.setSource('mic');
+  check('permissions: only an explicit start asks, and a refusal is reported not thrown',
+    asked.join() === 'mic' && started === false && p.status.startsWith('no permission'), asked.join() + ' | ' + p.status);
+  const shared = await p.setSource('capture');
+  check('permissions: the capture source asks the display, once', asked.join() === 'mic,capture' && shared === false, asked.join());
+  p.stop();
+  delete navigator.mediaDevices;
+}
+
 // Camera: the orbit target projects to the centre of the screen, in front of the camera.
 const cam = new OrbitCamera(); cam.target = [1, 2, 3]; cam.update(1.5, 0);
 const vp = cam.viewProj, t = cam.target;

@@ -38,10 +38,14 @@ export class Pulse {
     this.A = { ...ZERO };
     this.source = 'off'; this.status = 'off'; this.title = ''; this.offset = 0; this.base = DEFAULT_BASE;
     this._now = null; this._analysis = null; this._key = ''; this._timer = 0; this._gen = 0;
-    this._ctx = null; this._stream = null; this._an = null;
+    this._ctx = null; this._stream = null; this._an = null; this.onStop = null;
   }
 
-  // kind: 'off' | 'auxcord' | 'capture' (a tab or the screen's sound) | 'mic'
+  // kind: 'off' | 'auxcord' | 'capture' (a tab or the screen's sound) | 'mic'. Returns whether the
+  // source is now running. NOTHING here happens on its own: capture and mic put a permission prompt
+  // in front of the person, and auxcord reaches out to a port on their machine, so this is only ever
+  // called from an explicit press in the Pulse settings (main.js). A saved state or a share link that
+  // names a source does not start it — it waits behind the Start button.
   async setSource(kind, url) {
     this.stop();
     this.source = kind;
@@ -50,9 +54,11 @@ export class Pulse {
       this.base = (url || DEFAULT_BASE).replace(/\/+$/, '');
       this.status = 'connecting…';
       this._poll(gen);
-    } else if (kind === 'capture' || kind === 'mic') {
-      await this._startLive(kind === 'mic', gen);
-    } else this.status = 'off';
+      return true;
+    }
+    if (kind === 'capture' || kind === 'mic') return await this._startLive(kind === 'mic', gen);
+    this.status = 'off';
+    return false;
   }
 
   stop() {
@@ -109,11 +115,15 @@ export class Pulse {
       stream = mic
         ? await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } })
         : await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
-    } catch (e) { if (gen === this._gen) this.status = 'no permission: ' + e.message; return; }
-    if (gen !== this._gen) { for (const tr of stream.getTracks()) tr.stop(); return; }
+    } catch (e) { if (gen === this._gen) this.status = 'no permission: ' + e.message; return false; }
+    if (gen !== this._gen) { for (const tr of stream.getTracks()) tr.stop(); return false; }
     for (const tr of stream.getVideoTracks()) tr.stop();
     const audio = stream.getAudioTracks()[0];
-    if (!audio) { this.status = 'nothing shared had sound — tick "share audio"'; return; }
+    if (!audio) {
+      for (const tr of stream.getTracks()) tr.stop();
+      this.status = 'nothing shared had sound — tick "share audio"';
+      return false;
+    }
     this._stream = stream;
     this._ctx = new AudioContext();
     await this._ctx.resume().catch(() => {});
@@ -122,9 +132,15 @@ export class Pulse {
     src.connect(an);
     this._an = an; this._fft = new Uint8Array(an.frequencyBinCount);
     this._peak = [0.2, 0.2, 0.2, 0.2]; this._hist = []; this._lastBeat = -1; this._ivals = []; this._prevBass = 0;
-    audio.addEventListener('ended', () => { if (gen === this._gen) { this.status = 'sharing stopped'; this._an = null; } });
+    // Stopped from the browser's own sharing bar: say so, and let the app offer Start again.
+    audio.addEventListener('ended', () => {
+      if (gen !== this._gen) return;
+      this.status = 'sharing stopped'; this._an = null;
+      if (this.onStop) this.onStop();
+    });
     this.title = mic ? 'microphone' : (audio.label || 'shared audio');
     this.status = 'listening';
+    return true;
   }
 
   _live(t, A) {

@@ -9,7 +9,7 @@ export const DEFAULTS = {
   colorMode: 1, palette: 0, colorScale: 2, color: '#ffb347', bg: '#000000',
   box: { c: [0, 0, 0], s: [3, 3, 3] }, showBox: 1, autoRotate: 0, upAxis: 0,
   cursorMode: 1, cursorForce: 1.5, cursorRadius: 0.3,
-  pulseSource: 0, pulseUrl: 'http://localhost:5226', pulseOffset: 0, pulseDrive: 0, pulseSpeed: 1.5, pulseGlow: 0.8, pulseZoom: 0.25,
+  pulseSource: 0, pulseOn: false, pulseUrl: 'http://localhost:5226', pulseOffset: 0, pulseDrive: 0, pulseSpeed: 1.5, pulseGlow: 0.8, pulseZoom: 0.25,
   cam: null,
 };
 
@@ -51,9 +51,11 @@ export const SCHEMA = [
   { key: 'cursorRadius', label: 'Reach', type: 'range', min: 0.02, max: 1.5, step: 0.01, show: S => S.cursorMode > 0, fmt: v => v.toFixed(2) },
   { group: 'Pulse' },
   { key: 'pulseSource', label: 'Sync to', type: 'select', options: ['Off', 'Aux Cord bot', 'Shared audio', 'Microphone'] },
+  { key: 'pulseStart', label: 'Not running', type: 'button', text: 'Start', show: S => S.pulseSource > 0 && !S.pulseOn },
+  { key: 'pulseWait', type: 'note', text: 'Nothing is asked of the browser until you press Start.', show: S => S.pulseSource > 0 && !S.pulseOn },
   { key: 'pulseUrl', label: 'Bot address', type: 'text', show: S => S.pulseSource === 1 },
   { key: 'pulseOffset', label: 'Sync offset', type: 'range', min: -2, max: 2, step: 0.01, show: S => S.pulseSource === 1, fmt: v => (v >= 0 ? '+' : '') + v.toFixed(2) + ' s' },
-  { key: 'pulseMeter', type: 'meter', show: S => S.pulseSource > 0 },
+  { key: 'pulseMeter', type: 'meter', show: S => S.pulseSource > 0 && S.pulseOn },
   { key: 'pulseDrive', label: 'Driven by', type: 'select', options: ['Beat', 'Bass', 'Level'], show: S => S.pulseSource > 0 },
   { key: 'pulseSpeed', label: 'Speed punch', type: 'range', min: 0, max: 4, step: 0.05, show: S => S.pulseSource > 0, fmt: v => v.toFixed(2) },
   { key: 'pulseGlow', label: 'Glow', type: 'range', min: 0, max: 3, step: 0.05, show: S => S.pulseSource > 0, fmt: v => v.toFixed(2) },
@@ -93,7 +95,8 @@ async function pipe(bytes, stream) {
 }
 
 export async function encodeState(S) {
-  const { colorLin, bgLin, ...rest } = S;
+  // pulseOn is this session's business, not the document's: a link never arrives already listening.
+  const { colorLin, bgLin, pulseOn, ...rest } = S;
   const bytes = new TextEncoder().encode(JSON.stringify(rest));
   return b64u(await pipe(bytes, new CompressionStream('deflate-raw')));
 }
@@ -104,5 +107,6 @@ export async function decodeState(str) {
   const out = structuredClone(DEFAULTS);
   for (const k in out) if (S[k] !== undefined) out[k] = S[k];
   if (!out.box || !out.box.c || !out.box.s) out.box = structuredClone(DEFAULTS.box);
+  out.pulseOn = false;              // whatever the link says, nothing is running until asked
   return out;
 }

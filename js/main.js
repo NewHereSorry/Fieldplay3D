@@ -92,9 +92,11 @@ async function boot() {
   // Everything a load has to do, however the state was made.
   function adopt() {
     S.colorLin = S.colorLin || [0, 0, 0]; S.bgLin = S.bgLin || [0, 0, 0];
+    // Loading a field neither starts nor stops the music sync: what is running keeps running (and the
+    // picker is corrected to say so), and what the loaded state merely asks for waits behind Start.
+    if (S.pulseOn) S.pulseSource = KINDS.indexOf(pulse.source);
     editor.value = S.code; applyCam(); settings.refresh();
     engine.setCount(1 << S.count); engine.reset();
-    startPulse();
     compile(); persist();
   }
   function loadPreset(p) { applyPreset(S, p); adopt(); }
@@ -137,20 +139,30 @@ async function boot() {
     else if (key === 'box') { engine.reset(); }
     else if (key === 'upAxis') { cam.up = S.upAxis ? 'z' : 'y'; }
     else if (key === 'shape' || key === 'colorMode') settings.refresh();
-    else if (key === 'pulseSource' || key === 'pulseUrl') { startPulse(); settings.refresh(); }
+    else if (key === 'pulseSource') { if (S.pulseSource) startPulse(); else stopPulse(); settings.refresh(); }
+    else if (key === 'pulseStart') startPulse();
+    else if (key === 'pulseUrl') { if (S.pulseOn && pulse.source === 'auxcord') startPulse(); }
     persist();
   });
   engine.setCount(1 << S.count);
 
-  // ---- pulse: the music, as numbers. Capture sources need a click, so a saved one waits for it ----
+  // ---- pulse: the music, as numbers ----
+  // The page asks the browser for nothing on its own — no sharing, no microphone, no reaching for the
+  // bot's port. A source runs only after a press in this panel, so a saved state or a shared link that
+  // names one opens with Start waiting instead of a permission prompt.
   const pulse = new Pulse();
   const KINDS = ['off', 'auxcord', 'capture', 'mic'];
-  const startPulse = () => pulse.setSource(KINDS[S.pulseSource] || 'off', S.pulseUrl).catch(e => toast(e.message));
-  if (S.pulseSource >= 2) {
-    pulse.status = 'click anywhere to start';
-    const once = () => { document.removeEventListener('pointerdown', once); startPulse(); };
-    document.addEventListener('pointerdown', once);
-  } else startPulse();
+  S.pulseOn = false;
+  pulse.status = S.pulseSource ? 'not started' : 'off';
+  pulse.onStop = () => { S.pulseOn = false; settings.refresh(); persist(); };
+  async function startPulse() {
+    let ok = false;
+    try { ok = await pulse.setSource(KINDS[S.pulseSource] || 'off', S.pulseUrl); }
+    catch (e) { toast(e.message); }
+    S.pulseOn = ok; settings.refresh(); persist();
+    return ok;
+  }
+  function stopPulse() { pulse.stop(); S.pulseOn = false; pulse.status = S.pulseSource ? 'not started' : 'off'; }
 
   // ---- persistence: localStorage + the URL hash, debounced ----
   let persistTimer = 0;

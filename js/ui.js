@@ -49,6 +49,13 @@ export function buildSettings(host, S, onChange) {
         row.append(c, el('span', 'grow'));
         break;
       }
+      case 'button': {
+        const b = el('button', null, f.text); b.type = 'button';
+        b.addEventListener('click', () => onChange(f.key));
+        sync = () => {};
+        row.append(b, el('span', 'grow'));
+        break;
+      }
       case 'note': {
         row.className = 'ctl note'; row.replaceChildren(document.createTextNode(f.text));
         sync = () => {};
