@@ -1,0 +1,27 @@
+# This file is for the standalone mirror: when this folder is published as its own
+# repository its root is this directory, so none of the surrounding repo's rules apply
+# any more and the ones that matter have to be restated here.
+
+# Python (serve.py, tools/)
+__pycache__/
+*.py[cod]
+
+# Cloudflare wrangler, used by tools/deploy.py
+.wrangler/
+node_modules/
+
+# Editor / tooling
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Local agent state, never the shared kind
+.claude/settings.local.json
+
+# OS cruft
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
