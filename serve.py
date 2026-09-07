@@ -1,5 +1,5 @@
 """Static server for fieldplay3d that forbids caching, so edits show on plain reload.
-    python fieldplay3d/serve.py 5225
+    python serve.py 5225
 """
 import sys, os
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler

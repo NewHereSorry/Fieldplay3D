@@ -1,7 +1,7 @@
 // Pulse: what the music is doing right now, as numbers the field and the look can use.
-// Two kinds of source. 'auxcord' asks the Aux Cord bot's localhost endpoint for its clock and the
-// track's pre-analysed timeline (dashcord/bots/aux-cord/auxcord/pulse.py) and samples it at the
-// moment the room hears; 'capture' and 'mic' analyse live audio in the browser with Web Audio.
+// Two kinds of source. 'bot' asks a companion server on this machine for its clock and the track's
+// pre-analysed timeline — GET /now and GET /analysis?key= — and samples it at the moment the room
+// hears; 'capture' and 'mic' analyse live audio in the browser with Web Audio.
 // Either way the output is A = {bass, mid, high, level (0…1), beat (1 on the beat, decaying),
 // phase (0…1 to the next beat), bpm, on}.
 
@@ -41,16 +41,16 @@ export class Pulse {
     this._ctx = null; this._stream = null; this._an = null; this.onStop = null;
   }
 
-  // kind: 'off' | 'auxcord' | 'capture' (a tab or the screen's sound) | 'mic'. Returns whether the
+  // kind: 'off' | 'bot' | 'capture' (a tab or the screen's sound) | 'mic'. Returns whether the
   // source is now running. NOTHING here happens on its own: capture and mic put a permission prompt
-  // in front of the person, and auxcord reaches out to a port on their machine, so this is only ever
+  // in front of the person, and 'bot' reaches out to a port on their machine, so this is only ever
   // called from an explicit press in the Pulse settings (main.js). A saved state or a share link that
   // names a source does not start it — it waits behind the Start button.
   async setSource(kind, url) {
     this.stop();
     this.source = kind;
     const gen = ++this._gen;
-    if (kind === 'auxcord') {
+    if (kind === 'bot') {
       this.base = (url || DEFAULT_BASE).replace(/\/+$/, '');
       this.status = 'connecting…';
       this._poll(gen);
@@ -70,7 +70,7 @@ export class Pulse {
     Object.assign(this.A, ZERO);
   }
 
-  // ---- Aux Cord: the bot's clock twice a second, the timeline once per track ----
+  // ---- the bot: its clock twice a second, the timeline once per track ----
   async _poll(gen) {
     let ok = false;
     try {
@@ -97,7 +97,7 @@ export class Pulse {
   // Per frame; t = performance.now() / 1000.
   update(t) {
     const A = this.A;
-    if (this.source === 'auxcord') {
+    if (this.source === 'bot') {
       const N = this._now, an = this._analysis;
       if (!N || !N.playing || N.paused || !an) return this._decay(A);
       sampleAnalysis(an, N.position + (t - N.recv) * N.rate + this.offset, A);

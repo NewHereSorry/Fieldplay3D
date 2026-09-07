@@ -1,5 +1,5 @@
 """Deploy fieldplay3d to Cloudflare Pages (project 'fieldplay3d' → https://fieldplay3d.pages.dev).
-    python fieldplay3d/tools/deploy.py
+    python tools/deploy.py
 Stages index.html, css/, js/, tests/ (minus the probe page) into a temp dir and runs
 `npx wrangler pages deploy`. Needs a one-time `npx wrangler login`; Node lives in the WinGet folder.
 """

@@ -142,7 +142,7 @@ async function boot() {
     else if (key === 'shape' || key === 'colorMode') settings.refresh();
     else if (key === 'pulseSource') { if (S.pulseSource) startPulse(); else stopPulse(); settings.refresh(); }
     else if (key === 'pulseStart') startPulse();
-    else if (key === 'pulseUrl') { if (S.pulseOn && pulse.source === 'auxcord') startPulse(); }
+    else if (key === 'pulseUrl') { if (S.pulseOn && pulse.source === 'bot') startPulse(); }
     persist();
   });
   engine.setCount(1 << S.count);
@@ -152,7 +152,7 @@ async function boot() {
   // bot's port. A source runs only after a press in this panel, so a saved state or a shared link that
   // names one opens with Start waiting instead of a permission prompt.
   const pulse = new Pulse();
-  const KINDS = ['off', 'auxcord', 'capture', 'mic'];
+  const KINDS = ['off', 'bot', 'capture', 'mic'];
   S.pulseOn = false;
   pulse.status = S.pulseSource ? 'not started' : 'off';
   pulse.onStop = () => { S.pulseOn = false; settings.refresh(); persist(); };

@@ -50,7 +50,7 @@ export const SCHEMA = [
   { key: 'cursorForce', label: 'Strength', type: 'range', min: 0.1, max: 8, log: true, show: S => S.cursorMode > 0, fmt: fmt3 },
   { key: 'cursorRadius', label: 'Reach', type: 'range', min: 0.02, max: 1.5, step: 0.01, show: S => S.cursorMode > 0, fmt: v => v.toFixed(2) },
   { group: 'Pulse' },
-  { key: 'pulseSource', label: 'Sync to', type: 'select', options: ['Off', 'Aux Cord bot', 'Shared audio', 'Microphone'] },
+  { key: 'pulseSource', label: 'Sync to', type: 'select', options: ['Off', 'Music bot', 'Shared audio', 'Microphone'] },
   { key: 'pulseStart', label: 'Not running', type: 'button', text: 'Start', show: S => S.pulseSource > 0 && !S.pulseOn },
   { key: 'pulseWait', type: 'note', text: 'Nothing is asked of the browser until you press Start.', show: S => S.pulseSource > 0 && !S.pulseOn },
   { key: 'pulseUrl', label: 'Bot address', type: 'text', show: S => S.pulseSource === 1 },

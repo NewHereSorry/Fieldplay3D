@@ -76,7 +76,7 @@ check('share link is url-safe', /^[A-Za-z0-9_-]+$/.test(enc), enc.slice(0, 40));
   check('pulse: bands blend between frames', Math.abs(A.bass - 56.25 / 255) < 1e-6, A.bass);
   check('pulse: tempo is carried', A.bpm === 120 && A.on === 1, A.bpm);
   check('pulse: bands decode from base64', decodeBands(btoa(String.fromCharCode(1, 2, 3, 4))).join() === '1,2,3,4');
-  const p = new Pulse(); p.source = 'auxcord';
+  const p = new Pulse(); p.source = 'bot';
   p._now = { playing: true, paused: false, position: 1.0, rate: 1, recv: 10 }; p._analysis = an;
   p.update(10.25);
   check('pulse: the clock runs on from the last poll', Math.abs(p.A.phase - 0.5) < 1e-6, p.A.phase);

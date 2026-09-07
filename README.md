@@ -3,7 +3,7 @@
 A 3D take on [anvaka/fieldplay](https://github.com/anvaka/fieldplay): type a vector field, watch particles flow through it. Here the field is `fn get_velocity(p: vec3f) -> vec3f`, the particles live in a volume, and everything about them runs on the GPU in a WebGPU compute shader.
 
 ```
-python fieldplay3d/serve.py 5225      # then open http://localhost:5225
+python serve.py 5225                  # then open http://localhost:5225
 ```
 
 Needs a browser with WebGPU (Chrome/Edge 113+, Safari 26, Firefox 141+). The Claude desktop app's built-in browser has `navigator.gpu` but no adapter, so verification runs through headless Chrome (see Tools).
@@ -28,7 +28,7 @@ When the camera moves fast the fade drops to *Trail while orbiting* so the old t
 | `js/presets.js` | the gallery: attractors and analytic flows with their bounds, dt and camera |
 | `js/random.js` | seeded random-field grammar |
 | `js/library.js` | the fields you saved yourself: name → a whole state, in this browser |
-| `js/audio.js` | Pulse: Aux Cord clock + beat map sampling, or live Web Audio analysis → bass/mid/high/level/beat/phase/bpm |
+| `js/audio.js` | Pulse: a music bot's clock + beat map sampling, or live Web Audio analysis → bass/mid/high/level/beat/phase/bpm |
 | `js/state.js` | defaults, the settings schema the panel is built from, share-link codec |
 | `js/ui.js` | schema → panel rows, toast, download |
 | `js/main.js` | bootstrap, loop, persistence, toolbar, keys, `window.FP` harness |
@@ -41,9 +41,9 @@ When the camera moves fast the fade drops to *Trail while orbiting* so the old t
 ## Tools
 
 ```
-python fieldplay3d/tools/shot.py http://localhost:5225/tests/index.html out.png --wait 20000 --text
-python fieldplay3d/tools/shot.py "http://localhost:5225/?preset=lorenz" shot.png --width 1600 --height 900 --wait 4000
-python fieldplay3d/tools/shot.py "http://localhost:5225/?preset=ring" soft.png --pre "while(!window.FP) await new Promise(r=>setTimeout(r,50)); FP.S.shape=2; return 'ok'" --eval "return FP.engine.count"
+python tools/shot.py http://localhost:5225/tests/index.html out.png --wait 20000 --text
+python tools/shot.py "http://localhost:5225/?preset=lorenz" shot.png --width 1600 --height 900 --wait 4000
+python tools/shot.py "http://localhost:5225/?preset=ring" soft.png --pre "while(!window.FP) await new Promise(r=>setTimeout(r,50)); FP.S.shape=2; return 'ok'" --eval "return FP.engine.count"
 ```
 
 `--pre` runs JavaScript statements after load and before the wait, `--eval` after the wait (use `return` for a printed value, `await` is allowed). `?preset=<id>` opens a preset fresh, ignoring the saved state; the URL hash carries a whole shared state.
@@ -56,9 +56,9 @@ python fieldplay3d/tools/shot.py "http://localhost:5225/?preset=ring" soft.png -
 
 ## Pulse — sync to music
 
-The *Pulse* group in the panel drives the look from music: **Aux Cord bot** polls the bot's localhost endpoint (`GET /now` for the player's rate-aware clock, `GET /analysis?key=` for the track's 50 Hz band timeline + beat map, made by `dashcord/bots/aux-cord/auxcord/pulse.py`) and samples it at the moment the room hears, with a *Sync offset* for Discord's latency; **Shared audio** / **Microphone** analyse live sound in the browser (Web Audio, adaptive band peaks, a bass-onset beat detector). Either way `js/audio.js` produces bass/mid/high/level, a decaying `beat`, `phase` and `bpm`; the knobs punch speed, exposure and a camera zoom on the beat, and the field sees `u.audio`, `u.beat`, `u.phase`, `u.bpm`. The "Pulse (sync to music)" preset shows the idiom.
+The *Pulse* group in the panel drives the look from music: **Music bot** polls a companion server on your own machine (`GET /now` for the player's rate-aware clock, `GET /analysis?key=` for the track's 50 Hz band timeline + beat map) and samples it at the moment the room hears, with a *Sync offset* for the player's latency — anything serving those two endpoints will do. **Shared audio** / **Microphone** analyse live sound in the browser (Web Audio, adaptive band peaks, a bass-onset beat detector). Either way `js/audio.js` produces bass/mid/high/level, a decaying `beat`, `phase` and `bpm`; the knobs punch speed, exposure and a camera zoom on the beat, and the field sees `u.audio`, `u.beat`, `u.phase`, `u.bpm`. The "Pulse (sync to music)" preset shows the idiom.
 
-**Nothing is requested of the browser on its own.** Screen or tab sharing, the microphone and the fetch to the bot's port all wait for an explicit *Start* in the Pulse panel — never a page load, a field load or a stray click. `pulseOn` is session state, stripped by `encodeState` and forced false by `decodeState`, so a link or a saved field can name a source but never arrive already listening; loading a field leaves a running source running and corrects the picker to match it. Without Discord: `python -m auxcord.pulse song.mp3` (from the bot folder) serves one file's pulse on 5226.
+**Nothing is requested of the browser on its own.** Screen or tab sharing, the microphone and the fetch to the bot's port all wait for an explicit *Start* in the Pulse panel — never a page load, a field load or a stray click. `pulseOn` is session state, stripped by `encodeState` and forced false by `decodeState`, so a link or a saved field can name a source but never arrive already listening; loading a field leaves a running source running and corrects the picker to match it.
 
 ## The tutorial
 
@@ -83,7 +83,7 @@ Because the left and middle buttons are the cursor's, the camera moved: **right-
 Deployed on Cloudflare Pages at **https://fieldplay3d.pages.dev** (project `fieldplay3d`, production branch `main`). Redeploy with:
 
 ```
-python fieldplay3d/tools/deploy.py
+python tools/deploy.py
 ```
 
 (one-time `npx wrangler login` first; the OAuth page must be approved within two minutes.)
