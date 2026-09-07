@@ -1,4 +1,4 @@
-# fieldplay 3D
+# fieldplay 3D https://fieldplay3d.pages.dev/
 
 A 3D take on [anvaka/fieldplay](https://github.com/anvaka/fieldplay): type a vector field, watch particles flow through it. Here the field is `fn get_velocity(p: vec3f) -> vec3f`, the particles live in a volume, and everything about them runs on the GPU in a WebGPU compute shader.
 
