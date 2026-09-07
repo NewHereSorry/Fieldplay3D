@@ -8,6 +8,7 @@ import { SCHEMA, applyPreset, freshState, hexToLinear, encodeState, decodeState 
 import { buildSettings, toast, download } from './ui.js';
 import * as library from './library.js';
 import { Pulse } from './audio.js';
+import { Tour } from './tutor.js';
 
 const $ = s => document.querySelector(s);
 const STORE = 'fieldplay3d.state';
@@ -186,6 +187,34 @@ async function boot() {
   const setPanel = hidden => { app.classList.toggle('hide-panel', hidden); $('#btn-show').hidden = !hidden; };
   $('#btn-hide').addEventListener('click', () => setPanel(true));
   $('#btn-show').addEventListener('click', () => setPanel(false));
+  // ---- the tutorial ----
+  // It drives the app rather than describing it: the same loadPreset, the same settings, and the same
+  // cursor uniform a real hand writes. The whole state is put back when it ends, however it ends.
+  const displayRect = () => {
+    const c = canvas.getBoundingClientRect();
+    const p = app.classList.contains('hide-panel') ? null : $('#panel').getBoundingClientRect();
+    const x = p ? Math.max(c.left, p.right) : c.left;
+    return { x, y: c.top, w: Math.max(1, c.right - x), h: c.height };
+  };
+  const tour = new Tour({
+    display: displayRect,
+    snapshot: () => encodeState(S),
+    restore: async enc => {
+      const on = S.pulseOn, src = S.pulseSource;          // the music is this session's, not the tour's
+      Object.assign(S, await decodeState(enc));
+      S.pulseOn = on; S.pulseSource = src;
+      adopt(); fillPresets();
+    },
+    preset: id => { const p = byId(id); if (p) { loadPreset(p); fillPresets(); } },
+    look: patch => { Object.assign(S, patch); settings.refresh(); },
+    hand: (x, y, down) => {
+      if (x == null) { mouse.over = 0; mouse.buttons = 0; mouse.down = 0; return; }
+      mouse.x = x; mouse.y = y; mouse.over = 1;
+      mouse.buttons = down ? 1 : 0; mouse.down = down ? 1 : 0;
+    },
+  });
+  $('#btn-tour').addEventListener('click', () => tour.start());
+
   $('#btn-help').addEventListener('click', () => { $('#help').hidden = false; });
   $('#btn-help-close').addEventListener('click', () => { $('#help').hidden = true; });
   $('#help').addEventListener('click', e => { if (e.target === $('#help')) $('#help').hidden = true; });
@@ -272,7 +301,7 @@ async function boot() {
   requestAnimationFrame(loop);
 
   // Harness for scripted verification (screenshots with a hidden pane, tests).
-  window.FP = { S, engine, cam, editor, compile, loadPreset, loadSaved, library, mouse, presets: PRESETS, pulse, settings,
+  window.FP = { S, engine, cam, editor, compile, loadPreset, loadSaved, library, mouse, presets: PRESETS, pulse, settings, tour,
     frame: () => frame(performance.now()), pause: v => setPaused(v), stop: () => { running = false; }, run: () => { if (!running) { running = true; requestAnimationFrame(loop); } } };
 }
 

@@ -1,0 +1,270 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>tutorial checks</title>
+<link rel="stylesheet" href="../css/style.css">
+<link rel="stylesheet" href="../css/tutor.css">
+<style>
+  body { margin: 0; padding: 16px; background: #05070a; color: #c9d1d9; font: 13px/1.5 Consolas, monospace; overflow: auto; }
+  #stubs { position: absolute; left: -9999px; top: 0; }
+  #stubs > * { display: block; width: 380px; height: 300px; }
+  #out { margin-top: 12px; white-space: pre-wrap; }
+  .p { color: #98c379; } .f { color: #ff6b6b; } .d { color: #e5c07b; font-weight: bold; }
+</style>
+<!-- The elements the steps shine a light on; the tour only ever reads their rectangles. -->
+<div id="stubs">
+  <div id="editor"></div>
+  <select id="preset"></select>
+  <button id="btn-random"></button>
+  <button id="btn-share"></button>
+</div>
+<pre id="out">running…</pre>
+<script type="module">
+import { Tour, TOUR_STEPS } from '../js/tutor.js';
+
+if (document.readyState !== 'complete') await new Promise(r => addEventListener('load', r));
+
+const out = document.getElementById('out');
+const lines = [];
+let pass = 0, total = 0;
+const eq = (a, b, what) => { if (a !== b) throw new Error(`${what}: ${JSON.stringify(a)} !== ${JSON.stringify(b)}`); };
+const ok = (c, what) => { if (!c) throw new Error(what); };
+function check(name, fn) {
+  total++;
+  try { fn(); pass++; lines.push(`<span class="p">PASS</span> ${name}`); }
+  catch (e) { lines.push(`<span class="f">FAIL</span> ${name}: ${String(e.message || e).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c])}`); }
+}
+
+const DISPLAY = { x: 400, y: 0, w: 1040, h: 900 };
+const made = [];
+function mk() {
+  const log = [];
+  const t = new Tour({
+    display: () => DISPLAY,
+    snapshot: async () => { log.push('snapshot'); return 'SNAP'; },
+    restore: async enc => { log.push('restore:' + enc); },
+    preset: id => log.push('preset:' + id),
+    look: patch => log.push('look:' + Object.keys(patch).sort().join(',')),
+    hand: (x, y, down) => log.push(x == null ? 'hand:off' : 'hand:' + (down ? 'down' : 'up')),
+  });
+  made.push(t);
+  return { t, log };
+}
+// A step is shown without its timer, so a check is never racing the tour forward.
+const at = (t, i) => { t.show(i); clearTimeout(t.timer); };
+
+const steps = TOUR_STEPS;
+
+check('the steps are a plain, complete list', () => {
+  ok(steps.length >= 6, 'enough steps');
+  for (const [i, s] of steps.entries()) {
+    ok(typeof s.title === 'string' && s.title.length > 0, `step ${i} has a title`);
+    ok(typeof s.body === 'string' && s.body.length > 0, `step ${i} has a body`);
+    ok('spot' in s, `step ${i} declares a spot`);
+  }
+  eq(steps.filter(s => s.last).length, 1, 'exactly one last step');
+  eq(steps[steps.length - 1].last, true, 'the last step is last');
+});
+
+check('the first two steps are the code, then the picture', () => {
+  eq(steps[0].spot, '#editor', 'step 1 lights the editor');
+  eq(steps[1].spot, 'display', 'step 2 lights the display');
+});
+
+check('builds hidden, with one dot per step', () => {
+  const { t } = mk();
+  eq(t.els.root.hidden, true, 'starts hidden');
+  eq(t.running, false, 'not running');
+  eq(t.els.dots.children.length, steps.length, 'a dot per step');
+  ok(document.body.contains(t.els.root), 'attached');
+});
+
+const A = mk();
+await A.t.start();
+
+check('starting snapshots the state and shows step 1', () => {
+  eq(A.log[0], 'snapshot', 'snapshot taken first');
+  eq(A.t.running, true, 'running');
+  eq(A.t.i, 0, 'on step 1');
+  eq(A.t.els.root.hidden, false, 'visible');
+  eq(A.t.els.h.textContent, steps[0].title, 'title shown');
+  eq(A.t.els.p.textContent, steps[0].body, 'body shown');
+  eq(A.t.els.num.textContent, `Step 1 of ${steps.length}`, 'counter');
+});
+clearTimeout(A.t.timer);
+
+check('the lit hole follows the named element', () => {
+  at(A.t, 0);
+  const r = document.getElementById('editor').getBoundingClientRect();
+  const h = A.t.els.hole;
+  eq(parseFloat(h.style.left), r.left - 6, 'left padded by 6');
+  eq(parseFloat(h.style.width), r.width + 12, 'width padded both sides');
+  eq(A.t.els.root.classList.contains('bare'), false, 'dimmed');
+});
+
+check('the display step lights the canvas the panel does not cover', () => {
+  at(A.t, 1);
+  const h = A.t.els.hole;
+  eq(parseFloat(h.style.left), DISPLAY.x, 'starts right of the panel');
+  eq(parseFloat(h.style.width), DISPLAY.w, 'width from the api');
+  eq(A.t.els.root.classList.contains('bare'), false, 'still dimmed');
+});
+
+check('a step with no spot dims nothing', () => {
+  const i = steps.findIndex(s => !s.spot);
+  at(A.t, i);
+  eq(A.t.els.root.classList.contains('bare'), true, 'bare');
+});
+
+check('the hand step holds the button down and shows the ring', () => {
+  const i = steps.findIndex(s => s.tick);
+  at(A.t, i);
+  A.log.length = 0;
+  steps[i].tick(A.t.api, 0.5);
+  eq(A.log[0], 'hand:down', 'the button is held');
+  eq(A.t.els.hand.classList.contains('on'), true, 'ring visible');
+  const x = parseFloat(A.t.els.hand.style.left);
+  ok(x > DISPLAY.x && x < DISPLAY.x + DISPLAY.w, `ring inside the display (${x})`);
+});
+
+check('the hand moves as time passes', () => {
+  const i = steps.findIndex(s => s.tick);
+  at(A.t, i);
+  steps[i].tick(A.t.api, 0);
+  const a = A.t.els.hand.style.left;
+  steps[i].tick(A.t.api, 1.2);
+  ok(a !== A.t.els.hand.style.left, 'position changed');
+});
+
+check('leaving the hand step lets go', () => {
+  const i = steps.findIndex(s => s.tick);
+  at(A.t, i);
+  A.log.length = 0;
+  steps[i].exit(A.t.api);
+  eq(A.log[0], 'hand:off', 'released');
+  eq(A.t.els.hand.classList.contains('on'), false, 'ring hidden');
+});
+
+check('the look step changes only the look', () => {
+  const i = steps.findIndex(s => s.enter && s.spot === null && !s.tick);
+  at(A.t, i);
+  const patch = [];
+  steps[i].enter({ look: p => patch.push(...Object.keys(p)) });
+  ok(patch.length > 0, 'something changed');
+  for (const k of patch) ok(!['code', 'count', 'dt', 'box', 'preset'].includes(k), `${k} is a look key, not the maths`);
+});
+
+check('the preset step loads a preset by id', () => {
+  const i = steps.findIndex(s => s.spot === '#preset');
+  A.log.length = 0;
+  at(A.t, i);
+  ok(A.log.some(l => l.startsWith('preset:')), `a preset was loaded (${A.log.join('|')})`);
+});
+
+// Its own tour: walking every step reaches the last one, which spends the snapshot.
+const C = mk();
+await C.t.start();
+clearTimeout(C.t.timer);
+check('the caption stays on screen', () => {
+  for (let i = 0; i < steps.length; i++) {
+    at(C.t, i);
+    const s = C.t.els.say, r = { l: parseFloat(s.style.left), t: parseFloat(s.style.top) };
+    ok(r.l >= 0 && r.l + s.offsetWidth <= innerWidth + 1, `step ${i + 1} horizontally inside (${r.l})`);
+    ok(r.t >= 0 && r.t + s.offsetHeight <= innerHeight + 1, `step ${i + 1} vertically inside (${r.t})`);
+  }
+});
+C.t.stop();
+
+check('the dots track progress', () => {
+  at(A.t, 3);
+  const on = [...A.t.els.dots.children].filter(d => d.classList.contains('on')).length;
+  eq(on, 4, 'four lit on step 4');
+});
+
+check('the last step gives the field back and offers a way in', () => {
+  A.log.length = 0;
+  at(A.t, steps.length - 1);
+  eq(A.log[0], 'restore:SNAP', 'restored');
+  eq(A.t.els.skip.textContent, 'Start playing', 'the button invites');
+  eq(A.t.els.skip.classList.contains('go'), true, 'and is marked');
+  eq(A.t.els.hint.hidden, true, 'no click-to-continue on the last one');
+});
+
+check('the field is given back exactly once', () => {
+  A.log.length = 0;
+  A.t.stop();
+  eq(A.log.filter(l => l.startsWith('restore')).length, 0, 'not restored a second time');
+  eq(A.t.running, false, 'stopped');
+  eq(A.t.els.root.hidden, true, 'hidden');
+});
+
+check('next() walks forward and ends the tour', () => {
+  const { t, log } = mk();
+  t.running = true; t.snap = 'SNAP'; t.els.root.hidden = false;
+  at(t, steps.length - 2);
+  log.length = 0;
+  t.next();
+  eq(t.i, steps.length - 1, 'reached the last step');
+  clearTimeout(t.timer);
+  t.next();
+  eq(t.running, false, 'the tour ended');
+});
+
+check('skipping in the middle still gives the field back', async () => {
+  const { t, log } = mk();
+  t.running = true; t.snap = 'SNAP'; t.els.root.hidden = false;
+  at(t, 1);
+  log.length = 0;
+  t.stop();
+  eq(log[0], 'restore:SNAP', 'restored on skip');
+  eq(t.els.root.hidden, true, 'hidden');
+});
+
+check('stopping releases the hand even mid-gesture', () => {
+  const { t, log } = mk();
+  t.running = true; t.snap = null; t.els.root.hidden = false;
+  const i = steps.findIndex(s => s.tick);
+  at(t, i);
+  steps[i].tick(t.api, 0.3);
+  log.length = 0;
+  t.stop();
+  eq(log[0], 'hand:off', 'let go');
+  eq(t.els.hand.classList.contains('on'), false, 'ring gone');
+});
+
+// The key listener lives and dies with start()/stop(), so this one must really start.
+const E = mk();
+await E.t.start();
+clearTimeout(E.t.timer);
+check('escape stops it, and a stopped tour ignores keys', () => {
+  eq(E.t.running, true, 'running before');
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  eq(E.t.running, false, 'stopped by escape');
+  eq(E.t.els.root.hidden, true, 'hidden');
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  eq(E.t.running, false, 'still stopped');
+});
+
+check('a second start is ignored while one is running', async () => {
+  const { t, log } = mk();
+  await t.start();
+  clearTimeout(t.timer);
+  const n = log.filter(l => l === 'snapshot').length;
+  await t.start();
+  clearTimeout(t.timer);
+  eq(log.filter(l => l === 'snapshot').length, n, 'no second snapshot');
+  t.stop();
+});
+
+check('a missing target does not throw', () => {
+  const { t } = mk();
+  t.running = true; t.els.root.hidden = false;
+  const r = t.rect('#nothing-here');
+  eq(r.w, innerWidth, 'falls back to the whole viewport');
+  t.stop();
+});
+
+for (const t of made) { try { t.stop(); } catch (e) {} t.els.root.remove(); }
+
+lines.push(`<span class="d">DONE ${pass}/${total}</span>`);
+out.innerHTML = lines.join('\n');
+</script>

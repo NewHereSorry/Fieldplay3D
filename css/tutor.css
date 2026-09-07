@@ -1,0 +1,48 @@
+/* The tutorial overlay: one dimmed hole and one caption, above everything else. */
+#btn-tour { padding: 4px 10px; font-size: 12px; height: 32px; }
+#tour { position: fixed; inset: 0; z-index: 20; cursor: pointer; }
+
+/* The dim is the hole's own shadow, so there is exactly one lit rectangle at a time. */
+.tour-hole {
+  position: fixed; border-radius: 10px; pointer-events: none;
+  box-shadow: 0 0 0 9999px rgba(3, 6, 10, .78);
+  outline: 1px solid rgba(97, 175, 239, .55); outline-offset: 0;
+  transition: left .35s ease, top .35s ease, width .35s ease, height .35s ease, box-shadow .35s ease;
+}
+#tour.bare .tour-hole { box-shadow: 0 0 0 9999px rgba(3, 6, 10, 0); outline-color: transparent; }
+
+.tour-say {
+  position: fixed; width: min(420px, calc(100vw - 32px)); pointer-events: none;
+  background: rgba(13, 17, 23, .96); border: 1px solid #263244; border-radius: 10px;
+  padding: 14px 16px 12px; box-shadow: 0 12px 40px rgba(0, 0, 0, .55);
+  transition: left .35s ease, top .35s ease;
+}
+.tour-say h3 { margin: 2px 0 6px; font-size: 17px; font-weight: 600; letter-spacing: .2px; }
+.tour-say p { margin: 0; color: var(--dim); font-size: 13px; line-height: 1.5; }
+.tour-num { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--faint); }
+
+.tour-foot { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+.tour-dots { display: flex; gap: 5px; flex: 1; }
+.tour-dots i { width: 5px; height: 5px; border-radius: 50%; background: #2b3646; transition: background .2s; }
+.tour-dots i.on { background: var(--accent); }
+.tour-say button { pointer-events: auto; padding: 4px 10px; font-size: 12px; }
+.tour-say button.go { border-color: var(--accent); color: var(--accent); }
+.tour-hint { color: var(--faint); font-size: 11px; }
+
+/* The hand the tour drives, so the bend in the flow has a visible cause. */
+.tour-hand {
+  position: fixed; width: 34px; height: 34px; margin: -17px 0 0 -17px; border-radius: 50%;
+  border: 2px solid var(--accent); background: rgba(97, 175, 239, .16);
+  pointer-events: none; opacity: 0; transition: opacity .25s;
+}
+.tour-hand.on { opacity: 1; }
+.tour-hand::after {
+  content: ''; position: absolute; inset: -9px; border-radius: 50%;
+  border: 1px solid rgba(97, 175, 239, .35); animation: tour-ping 1.4s ease-out infinite;
+}
+@keyframes tour-ping { 0% { transform: scale(.7); opacity: .9; } 100% { transform: scale(1.25); opacity: 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .tour-hole, .tour-say { transition: none; }
+  .tour-hand::after { animation: none; }
+}
