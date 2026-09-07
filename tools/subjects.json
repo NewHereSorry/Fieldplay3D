@@ -1,0 +1,13 @@
+{
+ "fieldplay3d: a 3D fieldplay on WebGPU compute — type a WGSL vect": "Particles flowing through a WGSL vector field, on WebGPU compute",
+ "fieldplay3d: live on Cloudflare Pages at https://fieldplay3d.pag": "Deploy to Cloudflare Pages",
+ "fieldplay3d: Pulse — the particles dance to music. js/audio.js: ": "Pulse: drive the field from the music that is playing",
+ "fieldplay3d: shot.py --flag passes extra Chromium switches throu": "shot.py: pass extra Chromium switches through --flag",
+ "fieldplay3d: fields you save yourself, and a cursor that bends t": "Save your own fields, and a cursor that bends the flow",
+ "fieldplay3d: the cursor's force is on the mouse buttons — hold l": "Move the cursor's force onto the mouse buttons",
+ "fieldplay3d: the page asks the browser for nothing on its own. S": "Ask the browser for nothing until Start is pressed",
+ "fieldplay3d: a tutorial that shows the two things this site is, ": "Add the tutorial: the maths, then the same thing as wind",
+ "fieldplay3d: the three files it needs to be publishable on its o": "Add LICENSE, .gitignore and the publish mirror tool",
+ "fieldplay3d: publish.py decides who the commits say they are, be": "publish.py: choose the identity the published commits carry",
+ "fieldplay3d: read it as if this folder were the whole repository": "Make the README read as if this folder were the repository"
+}

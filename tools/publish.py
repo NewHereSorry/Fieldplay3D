@@ -24,18 +24,30 @@ pushed, that rewrite never touches local history. Publishing without --author ne
 explicit --keep-authors, so the identity is always a decision rather than a default. The
 identities that would be published are printed before anything leaves the machine.
 
-Replayed commits keep their original author date and take it as the committer date too, so
-the same history always produces the same commits and repeated pushes fast-forward.
+SUBJECT LINES. Git reads everything before the first blank line as the subject, so a message
+that opens with an unbroken paragraph has a subject hundreds of characters long — which is
+what makes `git log --oneline` and a forge's file list repeat a wall of text beside every
+row. tools/subjects.json maps the opening of such a message to a short line, prepended on
+publication with the original kept verbatim underneath; anything with no entry is published
+untouched and reported, so new commits are expected to carry a real subject of their own
+rather than grow the file. --no-subjects publishes messages exactly as written.
+
+Every replayed field is derived from the input commit and never from the clock, so the same
+history always produces the same commits and repeated pushes fast-forward. Changing an
+identity or a subject changes the commits, so the publish after such a change needs --force
+once, and fast-forwards again after that.
 
 Splitting walks the whole surrounding history, so expect this to take a while on a large
 repository. Only a rewrite of the surrounding history would need --force.
 
 Nothing here is configured in the file: the remote and the identity are arguments.
 """
-import argparse, os, re, subprocess, sys
+import argparse, json, os, re, subprocess, sys
 
 PROJECT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+SUBJECTS = os.path.join(PROJECT, 'tools', 'subjects.json')
 AUTHOR_RE = re.compile(r'^\s*(?P<name>[^<>]+?)\s*<\s*(?P<email>[^<>\s]+@[^<>\s]+)\s*>\s*$')
+SUBJECT_MAX = 72
 
 
 def git(*args, cwd, check=True, strip=True, env=None, stdin=None):
@@ -54,25 +66,68 @@ def identities(root, sha):
     return sorted({l.strip() for l in out.splitlines() if l.strip()})
 
 
-def replay_as(root, sha, name, email):
-    """Rebuild a linear history under one identity, returning the new head.
+def subject_key(message):
+    """A stable handle on a commit message: its opening, whitespace-normalised.
 
-    The trees are reused untouched, so this changes who the commits say they are and
-    nothing else. Committer date is pinned to the author date to keep the result
-    deterministic: the same input history must always produce the same commits, or
-    every publish would need a force push.
+    Keyed on the text rather than on a commit hash because splitting mints new hashes
+    every time, while the message a commit carries never moves.
+    """
+    return ' '.join(message.strip().split())[:64]
+
+
+def load_subjects():
+    """Short subject lines to prepend, for messages that open with a long paragraph."""
+    try:
+        with open(SUBJECTS, encoding='utf-8') as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return {}
+    except (OSError, ValueError) as e:
+        sys.exit(f'{SUBJECTS} could not be read: {e}')
+
+
+def replay(root, sha, who, subjects):
+    """Rebuild a linear history with the trees reused untouched, returning the new head.
+
+    Two transformations, either or both: `who` puts one identity on every commit, and
+    `subjects` prepends a real subject line to messages that open with a paragraph — git
+    reads everything before the first blank line as the subject, so an unbroken opening
+    paragraph is what makes `git log --oneline` and GitHub's file list unreadable. The
+    original message is kept verbatim underneath, so nothing is lost or reworded.
+
+    Everything is derived from the input commit, never from the clock, so the same history
+    always produces the same commits; otherwise no publish after the first could
+    fast-forward. When `who` is given the committer date is pinned to the author date.
     """
     head = None
     for c in git('rev-list', '--reverse', sha, cwd=root).splitlines():
         tree = git('rev-parse', c + '^{tree}', cwd=root)
         message = git('log', '-1', '--format=%B', c, cwd=root, strip=False)
-        when = git('log', '-1', '--format=%aI', c, cwd=root)
+        an, ae, ad, cn, ce, cd = git('log', '-1', '--format=%an%n%ae%n%aI%n%cn%n%ce%n%cI',
+                                     c, cwd=root).split('\n')
+        if who:
+            an = cn = who[0]
+            ae = ce = who[1]
+            cd = ad
+        short = subjects.get(subject_key(message))
+        if short:
+            message = short + '\n\n' + message
         env = dict(os.environ,
-                   GIT_AUTHOR_NAME=name, GIT_AUTHOR_EMAIL=email, GIT_AUTHOR_DATE=when,
-                   GIT_COMMITTER_NAME=name, GIT_COMMITTER_EMAIL=email, GIT_COMMITTER_DATE=when)
+                   GIT_AUTHOR_NAME=an, GIT_AUTHOR_EMAIL=ae, GIT_AUTHOR_DATE=ad,
+                   GIT_COMMITTER_NAME=cn, GIT_COMMITTER_EMAIL=ce, GIT_COMMITTER_DATE=cd)
         args = ['commit-tree', tree] + (['-p', head] if head else [])
         head = git(*args, cwd=root, env=env, stdin=message)
     return head
+
+
+def overlong(root, sha):
+    """Commits still carrying a paragraph where a subject line belongs."""
+    out = []
+    for c in git('rev-list', '--reverse', sha, cwd=root).splitlines():
+        s = git('log', '-1', '--format=%s', c, cwd=root)
+        if len(s) > SUBJECT_MAX:
+            out.append((len(s), s[:58]))
+    return out
 
 
 def main():
@@ -83,6 +138,8 @@ def main():
                     help='publish every commit under this identity instead of the local one')
     ap.add_argument('--keep-authors', action='store_true',
                     help='publish the local identity as-is (required when --author is omitted)')
+    ap.add_argument('--no-subjects', action='store_true',
+                    help='publish messages exactly as written, without tools/subjects.json')
     ap.add_argument('--dry-run', action='store_true', help='split and report, push nothing')
     ap.add_argument('--force', action='store_true', help='force-push (only after a history rewrite)')
     ap.add_argument('--allow-dirty', action='store_true', help='publish committed history despite local changes')
@@ -124,9 +181,15 @@ def main():
         sys.exit(f'could not read a commit out of git subtree split:\n{out}')
 
     local = identities(root, sha)
-    if who:
-        print(f'\nrewriting {len(local)} identity(s) in the published history...', flush=True)
-        sha = replay_as(root, sha, *who)
+    subjects = {} if a.no_subjects else load_subjects()
+    if who or subjects:
+        what = []
+        if who:
+            what.append(f'{len(local)} identity(s)')
+        if subjects:
+            what.append(f'{len(subjects)} subject line(s)')
+        print(f'\nrewriting {" and ".join(what)} in the published history...', flush=True)
+        sha = replay(root, sha, who, subjects)
 
     n = git('rev-list', '--count', sha, cwd=root)
     print(f'\n{sha}  ({n} commits)')
@@ -136,6 +199,16 @@ def main():
     print('root of the published tree:')
     for name in git('ls-tree', '--name-only', sha, cwd=root).splitlines():
         print('  ' + name)
+
+    # A message with no blank line after its opening is all subject, which is what makes a
+    # file list on the forge repeat a paragraph beside every row.
+    long = overlong(root, sha)
+    if long:
+        print(f'\n{len(long)} commit(s) have no subject line — git will treat the whole opening\n'
+              f'paragraph as one. Give the message a short first line and a blank line after it,\n'
+              f'or add it to {os.path.relpath(SUBJECTS, PROJECT)}:', file=sys.stderr)
+        for n, s in long:
+            print(f'  {n:>5} chars  {s}...', file=sys.stderr)
 
     if not who and not a.keep_authors:
         print('\nThese identities are in your local history and would be published as-is,\n'
